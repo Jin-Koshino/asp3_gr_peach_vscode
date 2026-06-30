@@ -5,7 +5,7 @@
  *
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2004-2007 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2004-2018 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  *
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  *
- *  $Id: tSample2.h 711 2016-03-29 14:45:54Z ertl-hiro $
+ *  $Id: tSample2.h 867 2018-01-04 08:28:51Z ertl-hiro $
  */
 
 /*
@@ -74,14 +74,11 @@
 #endif /* LOOP_REF */
 
 /*
- *  関数のプロトタイプ宣言
+ *  必要な定義のチェック
  */
-#ifndef TOPPERS_MACRO_ONLY
-
-//extern void	task(intptr_t exinf);
-extern void	main_task(intptr_t exinf);
-extern void	cyclic_handler(intptr_t exinf);
-extern void	alarm_handler(intptr_t exinf);
-extern void	cpuexc_handler(void *p_excinf);
-
-#endif /* TOPPERS_MACRO_ONLY */
+#ifndef INTNO1
+#error INTNO1 is necessary for this sample program.
+#endif /* INTNO1 */
+#ifndef CPUEXC1
+#error CPUEXC1 is necessary for this sample program.
+#endif /* CPUEXC1 */

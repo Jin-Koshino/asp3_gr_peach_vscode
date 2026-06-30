@@ -5,13 +5,20 @@
 #undef TOPPERS_TARGET_RENAME_H
 
 /*
+ *  target_kernel_impl.h
+ */
+#undef lock_cpu
+#undef unlock_cpu
+#undef sense_lock
+
+/*
  *  target_kernel_impl.c
  */
 #undef dispatch
 #undef start_dispatch
 #undef exit_and_dispatch
-#undef ret_int
-#undef ret_exc
+#undef int_handler_entry
+#undef exc_handler_entry
 #undef call_exit_kernel
 #undef start_r
 #undef target_initialize
@@ -22,26 +29,10 @@
  */
 #undef target_hrt_initialize
 #undef target_hrt_terminate
-#undef target_hrt_get_current
-#undef target_hrt_set_event
-#undef target_hrt_raise_event
 #undef target_hrt_handler
 #undef target_ovrtimer_initialize
 #undef target_ovrtimer_terminate
-#undef target_ovrtimer_start
-#undef target_ovrtimer_stop
-#undef target_ovrtimer_get_current
 #undef target_ovrtimer_handler
-
-/*
- *  tTraceLog.c
- */
-#undef log_dsp_enter
-#undef log_dsp_leave
-#undef log_inh_enter
-#undef log_inh_leave
-#undef log_exc_enter
-#undef log_exc_leave
 
 
 #endif /* TOPPERS_TARGET_RENAME_H */

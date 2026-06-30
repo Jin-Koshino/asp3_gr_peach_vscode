@@ -2,7 +2,7 @@
  *  TOPPERS Software
  *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
- *  Copyright (C) 2015-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2015-2023 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -34,7 +34,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: test_dtq1.c 738 2016-04-05 14:19:24Z ertl-hiro $
+ *  $Id: test_dtq1.c 1784 2023-01-13 12:12:37Z ertl-hiro $
  */
 
 /* 
@@ -58,7 +58,7 @@
  * 【テスト項目】
  *
  *	(A) snd_dtqのエラー検出
- *		(A-1) 非タスクコンテキストからの呼出し［NGKI1722］
+ *		(A-1) 非タスクコンテキストからの呼出し［NGKI1725］
  *		(A-2) CPUロック状態からの呼出し［NGKI1724］
  *		(A-3) ディスパッチ保留状態からの呼出し［NGKI1725］
  *			(A-3-1) ディスパッチ禁止状態
@@ -71,8 +71,6 @@
  *			(A-6-1) 呼び出し時点で終了要求フラグがセット
  *			(A-6-2) 待ち状態になった後に終了要求
  *		(A-7) 待ちオブジェクトの削除または再初期化［NGKI1733］
- *	  ※ASPカーネルに適用されない要求：
- *			［NGKI1726］［NGKI1729］［NGKI1730］
  *	(B) snd_dtqの正常系処理
  *		(B-1) 受信待ち行列中のタスクを待ち解除［NGKI1734］
  *		(B-2) 待ち解除されたタスクにE_OKが返る［NGKI1735］
@@ -108,8 +106,6 @@
  *			(F-6-1) 呼び出し時点で終了要求フラグがセット
  *			(F-6-2) 待ち状態になった後に終了要求
  *		(F-7) 待ちオブジェクトの削除または再初期化［NGKI1765］
- *	  ※ASPカーネルに適用されない要求：
- *			［NGKI1757］［NGKI1760］［NGKI1761］［NGKI1762］
  *	(G) rcv_dtqの正常系処理
  *		(G-1) 受信したデータはp_dataが指すメモリ領域に［NGKI3421］
  *		(G-2) 管理領域の先頭のデータを受信［NGKI1766］
@@ -274,12 +270,22 @@
 #include <t_syslog.h>
 #include "syssvc/test_svc.h"
 #include "kernel_cfg.h"
-#include "test_dtq1.h"
+#include "test_common.h"
+
+/*
+ *  送受信するデータの定義
+ */
+#define	DATA0		((intptr_t) 0)
+#define	DATA1		((intptr_t) 1)
+#define	DATA2		((intptr_t) 2)
+#define	DATA3		((intptr_t) 3)
+#define	DATA4		((intptr_t) 4)
+#define	DATA5		((intptr_t) 5)
 
 /* DO NOT DELETE THIS LINE -- gentest depends on it. */
 
 void
-alarm1_handler(intptr_t exinf)
+alarm1_handler(EXINF exinf)
 {
 	ER_UINT	ercd;
 	intptr_t	data;
@@ -301,7 +307,7 @@ alarm1_handler(intptr_t exinf)
 }
 
 void
-task1(intptr_t exinf)
+task1(EXINF exinf)
 {
 	ER_UINT	ercd;
 	T_RDTQ	rdtq;
@@ -456,7 +462,7 @@ task1(intptr_t exinf)
 }
 
 void
-task2(intptr_t exinf)
+task2(EXINF exinf)
 {
 	ER_UINT	ercd;
 	intptr_t	data;
@@ -508,7 +514,7 @@ task2(intptr_t exinf)
 }
 
 void
-task3(intptr_t exinf)
+task3(EXINF exinf)
 {
 	ER_UINT	ercd;
 	intptr_t	data;

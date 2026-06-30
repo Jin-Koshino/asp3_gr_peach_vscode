@@ -3,7 +3,7 @@
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
  * 
- *  Copyright (C) 2007-2017 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2007-2022 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -35,7 +35,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: target_kernel_impl.c 791 2017-07-02 18:46:36Z ertl-hiro $
+ *  $Id: target_kernel_impl.c 1767 2022-12-24 12:37:08Z ertl-hiro $
  */
 
 /*
@@ -61,14 +61,12 @@
 /*
  *  MMUへの設定属性（第1レベルディスクリプタ）
  */
-#define MMU_ATTR_RAM	(ARM_MMU_DSCR1_SHARED|ARMV6_MMU_DSCR1_APX0 \
-							|ARM_MMU_DSCR1_TEX001|ARM_MMU_DSCR1_AP11 \
-							|ARM_MMU_DSCR1_CB11)
-#define MMU_ATTR_IODEV	(ARM_MMU_DSCR1_SHARED|ARMV6_MMU_DSCR1_APX0 \
-							|ARM_MMU_DSCR1_TEX000|ARM_MMU_DSCR1_AP11 \
-							|ARM_MMU_DSCR1_CB01|ARMV6_MMU_DSCR1_NOEXEC)
-#define MMU_ATTR_VECTOR	(ARMV6_MMU_DSCR1_APX0 \
-							|ARM_MMU_DSCR1_TEX001|ARM_MMU_DSCR1_AP11 \
+#define MMU_ATTR_RAM	(ARM_MMU_DSCR1_SHARED|ARM_MMU_DSCR1_TEX001 \
+							|ARMV6_MMU_DSCR1_AP011|ARM_MMU_DSCR1_CB11)
+#define MMU_ATTR_IODEV	(ARM_MMU_DSCR1_SHARED|ARM_MMU_DSCR1_TEX000 \
+							|ARMV6_MMU_DSCR1_AP011|ARM_MMU_DSCR1_CB01 \
+							|ARMV6_MMU_DSCR1_NOEXEC)
+#define MMU_ATTR_VECTOR	(ARM_MMU_DSCR1_TEX001|ARMV6_MMU_DSCR1_AP011 \
 							|ARM_MMU_DSCR1_CB11)
 
 /*
@@ -103,7 +101,8 @@
 /*
  *  MMUの設定情報（メモリエリアの情報）
  */
-ARM_MMU_CONFIG arm_memory_area[] = {
+__attribute__((weak))
+const ARM_MMU_CONFIG arm_memory_area[] = {
 	{ 0x00000000, VECTOR_ADDR, VECTOR_SIZE, VECTOR_ATTR },
 	{ SRAM_ADDR, SRAM_ADDR, SRAM_SIZE, SRAM_ATTR },
 	{ EB_SYS_ADDR, EB_SYS_ADDR, EB_SYS_SIZE, EB_SYS_ATTR },
@@ -114,15 +113,42 @@ ARM_MMU_CONFIG arm_memory_area[] = {
 /*
  *  MMUの設定情報の数（メモリエリアの数）
  */
+__attribute__((weak))
 const uint_t arm_tnum_memory_area
 					= sizeof(arm_memory_area) / sizeof(ARM_MMU_CONFIG);
 
 /*
  *  システムログの低レベル出力のための初期化
  *
- *  セルタイプtPutLogCT11MPCore内に実装されている関数を直接呼び出す．
+ *  セルタイプtPutLogSIOPort内に実装されている関数を直接呼び出す．
  */
-extern void	tPutLogCT11MPCore_initialize(void);
+extern void	tPutLogSIOPort_initialize(void);
+
+/*
+ *  ハードウェアの初期化
+ */
+void
+hardware_init_hook(void)
+{
+	uint32_t	reg;
+
+	/* 
+	 *  キャッシュとMMUのディスエーブル処理
+	 */
+	CP15_READ_SCTLR(reg);
+	if (reg & CP15_SCTLR_DCACHE) {
+		/* データキャッシュがイネーブルの場合 */
+		arm_clean_dcache();
+		arm_clean_outer_cache();
+		arm_disable_dcache();
+	}
+	/* MMUのディスエーブル */
+	arm_disable_mmu();
+	/* L2キャッシュのディスエーブル */
+	arm_disable_outer_cache();
+	/* 命令キャッシュのディスエーブル */
+	arm_disable_icache();
+}
 
 /*
  *  ターゲット依存の初期化
@@ -133,9 +159,9 @@ target_initialize(void)
 	uint32_t	reg;
 
 	/*
-	 *  チップ依存の初期化
+	 *  MPCore依存の初期化
 	 */
-	chip_initialize();
+	mpcore_initialize();
 	
 	/*
 	 *  Emulation Baseboardの割込みモードの設定
@@ -153,8 +179,16 @@ target_initialize(void)
 	 *  UARTを初期化
 	 */
 #ifndef TOPPERS_OMIT_TECS
-	tPutLogCT11MPCore_initialize();
+	tPutLogSIOPort_initialize();
 #endif /* TOPPERS_OMIT_TECS */
+}
+
+/*
+ *  デフォルトのsoftware_term_hook（weak定義）
+ */
+__attribute__((weak))
+void software_term_hook(void)
+{
 }
 
 /*
@@ -164,9 +198,14 @@ void
 target_exit(void)
 {
 	/*
-	 *  チップ依存の終了処理
+	 *  software_term_hookの呼出し
 	 */
-	chip_terminate();
+	software_term_hook();
+
+	/*
+	 *  MPCore依存の終了処理
+	 */
+	mpcore_terminate();
 
 	/*
 	 *  ターゲット依存の終了処理

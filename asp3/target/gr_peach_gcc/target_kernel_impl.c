@@ -2,11 +2,11 @@
  *  TOPPERS/ASP Kernel
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
- *
- *  Copyright (C) 2007-2016 by Embedded and Real-Time Systems Laboratory
+ * 
+ *  Copyright (C) 2007-2022 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
- *
- *  上記著作権者は，以下の(1)～(4)の条件を満たす場合に限り，本ソフトウェ
+ * 
+ *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
  *  ア（本ソフトウェアを改変したものを含む．以下同じ）を使用・複製・改
  *  変・再配布（以下，利用と呼ぶ）することを無償で許諾する．
  *  (1) 本ソフトウェアをソースコードの形で利用する場合には，上記の著作
@@ -28,14 +28,14 @@
  *      また，本ソフトウェアのユーザまたはエンドユーザからのいかなる理
  *      由に基づく請求からも，上記著作権者およびTOPPERSプロジェクトを
  *      免責すること．
- *
+ * 
  *  本ソフトウェアは，無保証で提供されているものである．上記著作権者お
  *  よびTOPPERSプロジェクトは，本ソフトウェアに関して，特定の使用目的
  *  に対する適合性も含めて，いかなる保証も行わない．また，本ソフトウェ
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
- *
- *  $Id: target_kernel_impl.c 734 2016-04-03 09:12:48Z ertl-hiro $
+ * 
+ *  $Id: target_kernel_impl.c 1773 2022-12-27 14:17:28Z ertl-hiro $
  */
 
 /*
@@ -46,8 +46,6 @@
 #include <sil.h>
 #include "arm.h"
 #include "rza1.h"
-#include "scif.h"
-#include "pl310.h"
 
 /*
  *  カーネル動作時のメモリマップと関連する定義
@@ -61,16 +59,17 @@
 /*
  *  MMUへの設定属性（第1レベルディスクリプタ）
  */
-#define MMU_ATTR_RAM	(ARM_MMU_DSCR1_SHARED|ARMV6_MMU_DSCR1_APX0 \
-							|ARM_MMU_DSCR1_TEX001|ARM_MMU_DSCR1_AP11 \
-							|ARM_MMU_DSCR1_CB11)
-#define MMU_ATTR_IODEV	(ARM_MMU_DSCR1_SHARED|ARMV6_MMU_DSCR1_APX0 \
-							|ARM_MMU_DSCR1_TEX000|ARM_MMU_DSCR1_AP11 \
-							|ARM_MMU_DSCR1_CB01|ARMV6_MMU_DSCR1_NOEXEC)
+#define MMU_ATTR_RAM	(ARM_MMU_DSCR1_SHARED|ARM_MMU_DSCR1_TEX001 \
+							|ARMV6_MMU_DSCR1_AP011|ARM_MMU_DSCR1_CB11)
+#define MMU_ATTR_IODEV	(ARM_MMU_DSCR1_SHARED|ARM_MMU_DSCR1_TEX000 \
+							|ARMV6_MMU_DSCR1_AP011|ARM_MMU_DSCR1_CB01 \
+							|ARMV6_MMU_DSCR1_NOEXEC)
+
 /*
  *  MMUの設定情報（メモリエリアの情報）
  */
-ARM_MMU_CONFIG arm_memory_area[] = {
+__attribute__((weak))
+const ARM_MMU_CONFIG arm_memory_area[] = {
 	{ SPI_ADDR, SPI_ADDR, SPI_SIZE, MMU_ATTR_RAM },
 	{ SRAM_ADDR, SRAM_ADDR, SRAM_SIZE, MMU_ATTR_RAM },
 	{ IO1_ADDR, IO1_ADDR, IO1_SIZE, MMU_ATTR_IODEV },
@@ -80,6 +79,7 @@ ARM_MMU_CONFIG arm_memory_area[] = {
 /*
  *  MMUの設定情報の数（メモリエリアの数）
  */
+__attribute__((weak))
 const uint_t arm_tnum_memory_area
 					= sizeof(arm_memory_area) / sizeof(ARM_MMU_CONFIG);
 
@@ -204,9 +204,9 @@ port_initialize(void)
 /*
  *  システムログの低レベル出力のための初期化
  *
- *  セルタイプtPutLogGRPeach内に実装されている関数を直接呼び出す．
+ *  セルタイプtPutLogSIOPort内に実装されている関数を直接呼び出す．
  */
-extern void	tPutLogGRPeach_initialize(void);
+extern void	tPutLogSIOPort_initialize(void);
 
 /*
  *  ターゲット依存の初期化
@@ -242,21 +242,24 @@ target_initialize(void)
 	CP15_WRITE_VBAR((uint32_t) &vector_table);
 
 	/*
-	 *  L2キャッシュコントローラ（PL310）の初期化
-	 */
-	pl310_initialize(0x0U, ~0x0U);
-
-	/*
 	 *  LEDを青色に点灯させる
 	 */
 	gr_peach_set_led(GR_PEACH_LED_BLUE, 1);
 
 	/*
-	 *  低レベル出力用にSIOを初期化
+	 *  SIOを初期化
 	 */
 #ifndef TOPPERS_OMIT_TECS
-	tPutLogGRPeach_initialize();
+	tPutLogSIOPort_initialize();
 #endif /* TOPPERS_OMIT_TECS */
+}
+
+/*
+ *  デフォルトのsoftware_term_hook（weak定義）
+ */
+__attribute__((weak))
+void software_term_hook(void)
+{
 }
 
 /*
@@ -265,6 +268,11 @@ target_initialize(void)
 void
 target_exit(void)
 {
+	/*
+	 *  software_term_hookの呼出し
+	 */
+	software_term_hook();
+
 	/*
 	 *  チップ依存の終了処理
 	 */

@@ -8,10 +8,11 @@
  *  startup.c
  */
 #undef kerflg
+#undef mpk_valid
 #undef exit_kernel
-#undef initialize_kmm
-#undef kernel_malloc
-#undef kernel_free
+#undef initialize_mempool
+#undef malloc_mempool
+#undef free_mempool
 
 /*
  *  task.c
@@ -37,7 +38,6 @@
  *  taskhook.c
  */
 #undef mtxhook_check_ceilpri
-#undef mtxhook_scan_ceilmtx
 #undef mtxhook_release_all
 
 /*
@@ -66,7 +66,7 @@
 #undef update_current_evttim
 #undef set_hrt_event
 #undef tmevtb_register
-#undef tmevtb_enqueue
+#undef tmevtb_enqueue_reltim
 #undef tmevtb_dequeue
 #undef check_adjtim
 #undef tmevt_lefttim
@@ -113,8 +113,6 @@
 #undef free_mtxcb
 #undef initialize_mutex
 #undef mutex_check_ceilpri
-#undef mutex_scan_ceilmtx
-#undef mutex_drop_priority
 #undef mutex_acquire
 #undef mutex_release
 #undef mutex_release_all
@@ -163,8 +161,10 @@
  *  kernel_cfg.c
  */
 #undef initialize_object
-#undef call_inirtn
-#undef call_terrtn
+#undef tnum_inirtn
+#undef inirtnb_table
+#undef tnum_terrtn
+#undef terrtnb_table
 #undef tmax_tskid
 #undef tmax_stskid
 #undef tinib_table
@@ -232,8 +232,18 @@
 #undef istksz
 #undef istk
 #undef istkpt
-#undef kmmsz
-#undef kmm
+#undef mpksz
+#undef mpk
+
+/*
+ *  tTraceLog.c
+ */
+#undef log_dsp_enter
+#undef log_dsp_leave
+#undef log_inh_enter
+#undef log_inh_leave
+#undef log_exc_enter
+#undef log_exc_leave
 
 
 #include "target_unrename.h"

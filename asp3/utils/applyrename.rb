@@ -6,7 +6,7 @@
 # 
 #  Copyright (C) 2003 by Embedded and Real-Time Systems Laboratory
 #                              Toyohashi Univ. of Technology, JAPAN
-#  Copyright (C) 2004-2016 by Embedded and Real-Time Systems Laboratory
+#  Copyright (C) 2004-2022 by Embedded and Real-Time Systems Laboratory
 #              Graduate School of Information Science, Nagoya Univ., JAPAN
 # 
 #  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -38,9 +38,10 @@
 #  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
 #  の責任を負わない．
 # 
-#  $Id: applyrename.rb 562 2016-01-21 14:24:34Z ertl-hiro $
+#  $Id: applyrename.rb 1580 2022-06-29 02:00:55Z ertl-hiro $
 # 
 
+Encoding.default_external = 'utf-8'
 require "fileutils"
 
 #
@@ -67,11 +68,11 @@ def applyRename(inFileName, syms)
 
   if FileUtils.cmp(inFileName, outFileName)
     # ファイルの内容が変化しなかった場合
-    FileUtils.remove(outFileName)
+    File.unlink(outFileName)
   else
     # ファイルの内容が変化した場合
-    FileUtils.move(inFileName, inFileName + ".bak")
-    FileUtils.move(outFileName, inFileName)
+    File.rename(inFileName, inFileName + ".bak")
+    File.rename(outFileName, inFileName)
     puts("Modified: #{inFileName}")
   end
 end

@@ -2,7 +2,7 @@
  *  TOPPERS Software
  *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
- *  Copyright (C) 2007-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2007-2019 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -34,7 +34,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: target_stddef.h 509 2016-01-12 06:06:14Z ertl-hiro $
+ *  $Id: target_stddef.h 1839 2024-11-04 06:31:53Z ertl-hiro $
  */
 
 /*
@@ -51,7 +51,7 @@
 /*
  *  ターゲットを識別するためのマクロの定義
  */
-#define TOPPERS_CT11MPCORE				/* システム略称 */
+#define TOPPERS_CT11MPCORE			/* システム略称 */
 
 /*
  *  開発環境で共通な定義
@@ -64,29 +64,34 @@
 #include "tool_stddef.h"
 
 /*
- *  チッブで共通な定義
+ *  コアで共通な定義
  */
-#include "chip_stddef.h"
+#include "core_stddef.h"
 
 /*
  *  アサーションの失敗時の実行中断処理
  */
 #ifndef TOPPERS_MACRO_ONLY
-#ifndef TECSGEN
 
 Inline void
 TOPPERS_assert_abort(void)
 {
 #if defined(TOPPERS_USE_QEMU) && !defined(TOPPERS_OMIT_QEMU_SEMIHOSTING)
 	/*
+	 *  デバッグコンソールへ文字列を出力．
+	 */
+	Asm("mov r0, #4\n\t"
+		"mov r1, %0\n\t"
+		"svc 0x00123456" : : "r"("Abort!\n"));
+
+	/*
 	 *  QEMUを終了させる．
 	 */
 	Asm("mov r0, #24\n\t"
 		"svc 0x00123456");
 #endif
-	while (1) ;
+	while (1) ;					/* trueの定義前なので，1と記述する */
 }
 
-#endif /* TECSGEN */
 #endif /* TOPPERS_MACRO_ONLY */
 #endif /* TOPPERS_TARGET_STDDEF_H */

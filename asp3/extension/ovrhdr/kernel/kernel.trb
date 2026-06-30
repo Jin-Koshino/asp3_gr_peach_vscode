@@ -5,7 +5,7 @@
 #       Advanced Standard Profile Kernel
 # 
 #   Copyright (C) 2015 by FUJI SOFT INCORPORATED, JAPAN
-#   Copyright (C) 2015,2016 by Embedded and Real-Time Systems Laboratory
+#   Copyright (C) 2015-2025 by Embedded and Real-Time Systems Laboratory
 #               Graduate School of Information Science, Nagoya Univ., JAPAN
 # 
 #   上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
 #   アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
 #   の責任を負わない．
 # 
-#   $Id: kernel.trb 670 2016-03-03 15:08:11Z ertl-hiro $
+#   $Id: kernel.trb 1855 2025-10-30 15:40:43Z ertl-hiro $
 # 
 
 #
@@ -74,16 +74,14 @@ $kernelCfgC.add(<<EOS)
 EOS
 
 #
-#  インクルードディレクティブ（#include）
+#  インクルードディレクティブ（#include）の生成
 #
 $kernelCfgC.comment_header("Include Directives")
-$includeFiles.each do |file|
-  $kernelCfgC.add("#include #{file}")
-end
+GenerateIncludes($kernelCfgC)
 $kernelCfgC.add()
 
 #
-#  スタック領域の確保関数
+#  スタック領域の確保
 #
 #  スタック領域の定義分と，スタック領域のサイズ記述を配列で返す．
 #
@@ -110,18 +108,20 @@ class KernelObject
   end
 
   def generate()
-    # kernel_cfg.hの生成
+    # オブジェクトの数のマクロ定義の生成（kernel_cfg.h）
+    # ［NGKI1022］［NGKI1451］［NGKI1557］［NGKI1664］［NGKI1799］
+    # ［NGKI2020］［NGKI2220］［NGKI2378］［NGKI2486］［NGKI3612］
     $kernelCfgH.add("#define TNUM_#{@OBJ}ID\t#{$cfgData[@api].size}")
 
-    # オブジェクトのID番号のマクロ定義の生成
-    $cfgData[@api].sort.each do |key, params|
+    # オブジェクトのID番号のマクロ定義の生成（kernel_cfg.h）
+    $cfgData[@api].sort.each do |_, params|
       $kernelCfgH.add("#define #{params[@objid]}\t#{params[@objid].val}")
     end
     $kernelCfgH.add()
 
     # オブジェクトのID番号を保持する変数
     if $USE_EXTERNAL_ID
-      $cfgData[@api].sort.each do |key, params|
+      $cfgData[@api].sort.each do |_, params|
         $kernelCfgC.add("const ID #{params[@objid]}_id" \
 										" = #{params[@objid].val};")
       end
@@ -178,7 +178,7 @@ def generateNotifyHandler(key, params, objid)
   nfymode = params[:nfymode]
   nfymode1 = nfymode & 0x0f
   nfymode2 = nfymode & ~0x0f
-  par1 = params[:par1]
+  # par1 = params[:par1]
   par2 = params[:par2]
 
   # 通知処理のパラメータ数による補正処理
@@ -186,9 +186,9 @@ def generateNotifyHandler(key, params, objid)
 								|| nfymode1 == $TNFY_SETFLG \
 								|| nfymode1 == $TNFY_SNDDTQ
     # 通知処理のパラメータが2つの場合
-	numpar = 2
-	epar1 = params[:par3]
-	epar2 = params[:par4]
+    numpar = 2
+    epar1 = params[:par3]
+    epar2 = params[:par4]
   else
     # 通知処理のパラメータが1つの場合
     numpar = 1
@@ -200,38 +200,35 @@ def generateNotifyHandler(key, params, objid)
   if (numpar == 2 && par2.nil?) || (nfymode2 != 0 && epar1.nil?) \
 								|| (nfymode2 == $TENFY_SETFLG && epar2.nil?)
     # パラメータが足りない場合
-    error_api(params, "too few parameters for nfymode `#{nfymode}' " \
-											"in %apiname of %#{objid}")
+    error_sapi(nil, params,
+					"too few parameters for nfymode `#{nfymode}'", objid)
   elsif (nfymode2 == 0 && !epar1.nil?) \
 					|| (nfymode2 != $TENFY_SETFLG && !epar2.nil?)
     # パラメータが多すぎる場合
-    error_api(params, "too many parameters for nfymode `#{nfymode}' " \
-											"in %apiname of %#{objid}")
-  elsif nfymode == $TNFY_HANDLER
-    # タイムイベントハンドラの呼出し
-    funcname = "(NFYHDR)(#{par2})"
+    error_sapi(nil, params,
+					"too many parameters for nfymode `#{nfymode}'", objid)
+  elsif nfymode1 == $TNFY_HANDLER && nfymode2 == 0		#［NGKI3721］
+    # タイムイベントハンドラの呼出し（通知ハンドラ名を上書き）
+    params[:nfyhdr] = "(NFYHDR)(#{par2})"
   else
-    # 通知ハンドラの関数名
-    funcname = "_kernel_nfyhdr_#{params[objid]}"
-
     # エラー通知のための変数のアドレスとオブジェクトIDを格納する
     # 変数の生成（エラーチェックのために必要）
     if nfymode2 == $TENFY_SETVAR || nfymode2 == $TENFY_INCVAR
-      $kernelCfgC.add2("intptr_t *const #{funcname}_p_evar =" \
+      $kernelCfgC.add2("intptr_t *const #{params[:nfyhdr]}_p_evar =" \
 											" (intptr_t *)(#{epar1});")
     elsif nfymode2 == $TENFY_ACTTSK || nfymode2 == $TENFY_WUPTSK
-      $kernelCfgC.add2("const ID #{funcname}_etskid = #{epar1};")
+      $kernelCfgC.add2("const ID #{params[:nfyhdr]}_etskid = #{epar1};")
     elsif nfymode2 == $TENFY_SIGSEM
-      $kernelCfgC.add2("const ID #{funcname}_esemid = #{epar1};")
+      $kernelCfgC.add2("const ID #{params[:nfyhdr]}_esemid = #{epar1};")
     elsif nfymode2 == $TENFY_SETFLG
-      $kernelCfgC.add2("const ID #{funcname}_eflgid = #{epar1};")
+      $kernelCfgC.add2("const ID #{params[:nfyhdr]}_eflgid = #{epar1};")
     elsif nfymode2 == $TENFY_SNDDTQ
-      $kernelCfgC.add2("const ID #{funcname}_edtqid = #{epar1};")
+      $kernelCfgC.add2("const ID #{params[:nfyhdr]}_edtqid = #{epar1};")
     end
 
     # 関数の先頭部分の生成
     $kernelCfgC.add("static void")
-    $kernelCfgC.add("#{funcname}(intptr_t exinf)")
+    $kernelCfgC.add("#{params[:nfyhdr]}(EXINF exinf)")
     $kernelCfgC.add("{")
 
     if nfymode2 == 0
@@ -244,10 +241,10 @@ def generateNotifyHandler(key, params, objid)
     end
 
     # イベント通知処理の処理
-    if nfymode1 == $TNFY_SETVAR && nfymode2 == 0
+    if nfymode1 == $TNFY_SETVAR && nfymode2 == 0		#［NGKI3721］
       # 変数の設定
       $kernelCfgC.add("\t*((intptr_t *) exinf) = (#{par2});")
-    elsif nfymode1 == $TNFY_INCVAR && nfymode2 == 0
+    elsif nfymode1 == $TNFY_INCVAR && nfymode2 == 0		#［NGKI3721］
       # 変数のインクリメント
       $kernelCfgC.add("\t(void) loc_cpu();")
       $kernelCfgC.add("\t*((intptr_t *) exinf) += 1;")
@@ -268,40 +265,42 @@ def generateNotifyHandler(key, params, objid)
       # データキューへの送信
       $kernelCfgC.add("\t#{errorCode}psnd_dtq(((ID) exinf), #{par2});")
     else
-      error_illegal_id("E_PAR", params, :nfymode, objid)
+      # nfymodeの値が正しくない場合（E_PAR）［NGKI3730］
+      error_sapi("E_PAR", params, "illegal %%nfymode", objid)
     end
-			
+
     if nfymode2 != 0
       # エラー通知処理の処理
       $kernelCfgC.add("\tif (ercd != E_OK) {")
 
-
       if nfymode2 == $TENFY_SETVAR
         # 変数の設定
-        $kernelCfgC.add("\t\t*#{funcname}_p_evar = (intptr_t) ercd;")
+        $kernelCfgC.add("\t\t*#{params[:nfyhdr]}_p_evar = (intptr_t) ercd;")
       elsif nfymode2 == $TENFY_INCVAR
         # 変数のインクリメント
         $kernelCfgC.add("\t\t(void) loc_cpu();")
-        $kernelCfgC.add("\t\t*#{funcname}_p_evar += 1;")
+        $kernelCfgC.add("\t\t*#{params[:nfyhdr]}_p_evar += 1;")
         $kernelCfgC.add("\t\t(void) unl_cpu();")
       elsif nfymode2 == $TENFY_ACTTSK
         # タスクの起動
-        $kernelCfgC.add("\t\t(void) act_tsk(#{funcname}_etskid);")
+        $kernelCfgC.add("\t\t(void) act_tsk(#{params[:nfyhdr]}_etskid);")
       elsif nfymode2 == $TENFY_WUPTSK
         # タスクの起床
-        $kernelCfgC.add("\t\t(void) wup_tsk(#{funcname}_etskid);")
+        $kernelCfgC.add("\t\t(void) wup_tsk(#{params[:nfyhdr]}_etskid);")
       elsif nfymode2 == $TENFY_SIGSEM
         # セマフォの返却
-        $kernelCfgC.add("\t\t(void) sig_sem(#{funcname}_esemid);")
+        $kernelCfgC.add("\t\t(void) sig_sem(#{params[:nfyhdr]}_esemid);")
       elsif nfymode2 == $TENFY_SETFLG
         # イベントフラグのセット
-        $kernelCfgC.add("\t\t(void) set_flg(#{funcname}_eflgid, #{epar2});")
+        $kernelCfgC.add("\t\t(void) set_flg(#{params[:nfyhdr]}_eflgid, " \
+															"#{epar2});")
       elsif nfymode2 == $TENFY_SNDDTQ
         # データキューへの送信
-        $kernelCfgC.add("\t\t(void) psnd_dtq(#{funcname}_edtqid," \
+        $kernelCfgC.add("\t\t(void) psnd_dtq(#{params[:nfyhdr]}_edtqid," \
 													" (intptr_t) ercd);")
       else
-        error_illegal_id("E_PAR", params, :nfymode, objid)
+        # nfymodeの値が正しくない場合（E_PAR）［NGKI3730］
+        error_sapi("E_PAR", params, "illegal %%nfymode", objid)
       end
       $kernelCfgC.add("\t}")
     end
@@ -309,7 +308,6 @@ def generateNotifyHandler(key, params, objid)
     # 関数の末尾部分の生成
     $kernelCfgC.add2("}")
   end
-  return(funcname)
 end
 
 #
@@ -332,59 +330,62 @@ IncludeTrb("kernel/exception.trb")
 #
 #  非タスクコンテキスト用のスタック領域
 #
-$kernelCfgC.comment_header("Stack Area for Non-task Context")
+if !$OMIT_ISTACK
+  $kernelCfgC.comment_header("Stack Area for Non-task Context")
 
-if $cfgData[:DEF_ICS].size == 0
-  # DEF_ICSがない場合のデフォルト値の設定
-  if $DEFAULT_ISTK.nil?
-    # スタック領域の自動割付け
-    istksz = AllocStack("_kernel_istack", "DEFAULT_ISTKSZ")
-    istk = "_kernel_istack"
-  else
-    istksz = "DEFAULT_ISTKSZ"
-    istk = "DEFAULT_ISTK"
-  end
-else
-  # 静的API「DEF_ICS」が複数ある（E_OBJ）［NGKI3216］
-  if $cfgData[:DEF_ICS].size > 1
-    error("E_OBJ: too many DEF_ICS")
-  end
-
-  # DEF_ICSがある場合の処理
-  params = $cfgData[:DEF_ICS][1]
-
-  # パラメータが省略された時のデフォルト値の設定
-  params[:istk] ||= "NULL"
-
-  # istkszがターゲット定義の最小値（TARGET_MIN_ISTKSZ，未定義の場合は1）
-  # よりも小さい場合（E_PAR）［NGKI3254］
-  if params[:istksz] < $TARGET_MIN_ISTKSZ
-    error_wrong("E_PAR", params, :istksz, "too small")
-  end
-
-  if params[:istk] == "NULL"
-    # スタック領域の自動割付け
-    istksz = AllocStack("_kernel_istack", params[:istksz])
-    istk = "_kernel_istack"
-  else
-    # istkszがスタック領域のサイズとして正しくない場合（E_PAR）［NGKI3222］
-    if (params[:istksz] & ($CHECK_STKSZ_ALIGN - 1)) != 0
-      error_wrong("E_PAR", params, :istksz, "not aligned")
+  if $cfgData[:DEF_ICS].size == 0
+    # DEF_ICSがない場合のデフォルト値の設定
+    if !defined?($DEFAULT_ISTK)
+      # スタック領域の自動割付け
+      istksz = AllocStack("_kernel_istack", "DEFAULT_ISTKSZ")
+      istk = "_kernel_istack"
+    else
+      istksz = "DEFAULT_ISTKSZ"
+      istk = "DEFAULT_ISTK"
     end
+  else
+    $cfgData[:DEF_ICS].each_with_index do |(_, params), index|
+      # パラメータが省略された時のデフォルト値の設定
+      params[:istk] ||= "NULL"
 
-    istksz = "(#{params[:istksz]})"
-    istk = "(void *)(#{params[:istk]})"
+      # istkszがターゲット定義の最小値（TARGET_MIN_ISTKSZ，未定義の場合は1）
+      # よりも小さい場合（E_PAR）［NGKI3254］
+      if params[:istksz] < $TARGET_MIN_ISTKSZ
+        error_wrong("E_PAR", params, :istksz, "too small")
+      end
+
+      # istkszがターゲット定義の制約に合致しない場合（E_PAR）［NGKI3222］
+      if params[:istk] != "NULL" \
+					&& (params[:istksz] & ($CHECK_STKSZ_ALIGN - 1)) != 0
+        error_wrong("E_PAR", params, :istksz, "not aligned")
+      end
+
+      # 非タスクコンテキスト用スタック領域が設定済みの場合（E_OBJ）［NGKI3216］
+      if index > 0
+        error_ercd("E_OBJ", params, "%apiname is duplicated")
+      end
+
+      if params[:istk] == "NULL"
+        # スタック領域の自動割付け
+        istksz = AllocStack("_kernel_istack", params[:istksz])
+        istk = "_kernel_istack"
+      else
+        istksz = "(#{params[:istksz]})"
+        istk = "(void *)(#{params[:istk]})"
+      end
+    end
   end
+
+  $kernelCfgC.add("const size_t _kernel_istksz = #{istksz};")
+  if !$OMIT_ISTK
+    $kernelCfgC.add("STK_T *const _kernel_istk = #{istk};")
+  end
+  if $TOPPERS_ISTKPT
+    $kernelCfgC.add("STK_T *const _kernel_istkpt" \
+						" = TOPPERS_ISTKPT(#{istk}, #{istksz});")
+  end
+  $kernelCfgC.add()
 end
-
-$kernelCfgC.add(<<EOS)
-const size_t _kernel_istksz = #{istksz};
-STK_T *const _kernel_istk = #{istk};
-
-#ifdef TOPPERS_ISTKPT
-STK_T *const _kernel_istkpt = TOPPERS_ISTKPT(#{istk}, #{istksz});
-#endif /* TOPPERS_ISTKPT */
-EOS
 
 #
 #  タイムイベント管理
@@ -411,54 +412,76 @@ $kernelCfgC.add2("}")
 #
 #  初期化ルーチン機能
 #
+
+# kernel_cfg.hの生成
+$kernelCfgH.add2("#define TNUM_INIRTN\t#{$cfgData[:ATT_INI].size}")
+
+# kernel_cfg.cの生成
 $kernelCfgC.comment_header("Initialization Routine")
 
 # エラーチェック
-$cfgData[:ATT_INI].each do |key, params|
-  # iniatrが無効の場合（E_RSATR）［NGKI3241］
+$cfgData[:ATT_INI].each do |_, params|
+  # iniatrが無効の場合（E_RSATR）［NGKI3241］［NGKI3202］［NGKI3203］
   #（TA_NULLでない場合）
   if (params[:iniatr] != $TA_NULL)
     error_illegal_sym("E_RSATR", params, :iniatr, :inirtn)
   end
 end
 
-# 初期化ルーチンの実行関数の生成
-$kernelCfgC.append(<<EOS)
-void
-_kernel_call_inirtn(void)
-{
-EOS
-$cfgData[:ATT_INI].each do |key, params|
-  $kernelCfgC.add("\t((INIRTN)(#{params[:inirtn]}))" \
-								"((intptr_t)(#{params[:exinf]}));")
+# 初期化ルーチンの数の定義
+$kernelCfgC.add2("const uint_t _kernel_tnum_inirtn = TNUM_INIRTN;");
+
+# 初期化ルーチンテーブルの生成
+if $cfgData[:ATT_INI].size > 0
+  $kernelCfgC.add("const INIRTNB _kernel_inirtnb_table[TNUM_INIRTN] = {")
+  $cfgData[:ATT_INI].each_with_index do |(_, params), index|
+    $kernelCfgC.add(",") if index > 0
+    $kernelCfgC.append("\t{ (INIRTN)(#{params[:inirtn]}), " \
+								"(EXINF)(#{params[:exinf]}) }")
+  end
+  $kernelCfgC.add
+  $kernelCfgC.add2("};")
+else
+  $kernelCfgC.add2("TOPPERS_EMPTY_LABEL(const INIRTNB, " \
+										"_kernel_inirtnb_table);")
 end
-$kernelCfgC.add2("}")
 
 #
 #  終了処理ルーチン機能
 #
+
+# kernel_cfg.hの生成
+$kernelCfgH.add2("#define TNUM_TERRTN\t#{$cfgData[:ATT_TER].size}")
+
+# kernel_cfg.cの生成
 $kernelCfgC.comment_header("Termination Routine")
 
 # エラーチェック
-$cfgData[:ATT_TER].each do |key, params|
-  # teratrが無効の場合（E_RSATR）［NGKI3248］
+$cfgData[:ATT_TER].each do |_, params|
+  # teratrが無効の場合（E_RSATR）［NGKI3248］［NGKI3208］［NGKI3209］
   #（TA_NULLでない場合）
   if (params[:teratr] != $TA_NULL)
     error_illegal_sym("E_RSATR", params, :teratr, :terrtn)
   end
 end
 
-# 終了処理ルーチンの実行関数の生成
-$kernelCfgC.append(<<EOS)
-void
-_kernel_call_terrtn(void)
-{
-EOS
-$cfgData[:ATT_TER].reverse_each do |key, params|
-  $kernelCfgC.add("\t((TERRTN)(#{params[:terrtn]}))" \
-								"((intptr_t)(#{params[:exinf]}));")
+# 終了処理ルーチンの数の定義
+$kernelCfgC.add2("const uint_t _kernel_tnum_terrtn = TNUM_TERRTN;");
+
+# 終了処理ルーチンテーブルの生成
+if $cfgData[:ATT_TER].size > 0
+  $kernelCfgC.add("const TERRTNB _kernel_terrtnb_table[TNUM_TERRTN] = {")
+  $cfgData[:ATT_TER].reverse_each.each_with_index do |(_, params), index|
+    $kernelCfgC.add(",") if index > 0
+    $kernelCfgC.append("\t{ (TERRTN)(#{params[:terrtn]}), " \
+								"(EXINF)(#{params[:exinf]}) }")
+  end
+  $kernelCfgC.add
+  $kernelCfgC.add2("};")
+else
+  $kernelCfgC.add2("TOPPERS_EMPTY_LABEL(const TERRTNB, " \
+										"_kernel_terrtnb_table);")
 end
-$kernelCfgC.add2("}")
 
 #
 #  kernel_cfg.hの末尾部分の生成

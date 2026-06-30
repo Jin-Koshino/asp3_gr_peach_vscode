@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2014 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2022 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: task.c 258 2014-10-04 19:37:38Z ertl-hiro $
+ *  $Id: task.c 1635 2022-09-23 10:00:19Z ertl-hiro $
  */
 
 /*
@@ -105,7 +105,7 @@ initialize_task(void)
 		p_tcb = &(tcb_table[j]);
 		p_tcb->p_tinib = &(tinib_table[j]);
 		p_tcb->actque = false;
-		p_tcb->subpri = UINT_MAX;
+		p_tcb->subpri = UINT_MAX;					/*［NGKI3681］*/
 		make_dormant(p_tcb);
 		p_tcb->p_lastmtx = NULL;
 		if ((p_tcb->p_tinib->tskatr & TA_ACT) != 0U) {
@@ -212,22 +212,55 @@ search_schedtsk(void)
 #endif /* TOPPERS_tsksched */
 
 /*
- *  タスクのサブ優先度順のキューへの挿入
+ *  タスクのサブ優先度順の現在値の取得
  *
- *  p_tcbで指定されるタスクを，サブ優先度順で，キューp_queueに挿入する．
- *  キューの中に同じサブ優先度のタスクがある場合には，mtxmodeがtrueの時
- *  はそれらの先頭に，falseの時はそれらの最後に挿入する．
+ *  タスクが優先度上昇状態の間は，サブ優先度の現在値を最高値（＝0）と
+ *  扱う［NGKI5219］．
+ */
+Inline uint_t
+current_subpri(TCB *p_tcb)
+{
+	return(p_tcb->boosted ? 0U : p_tcb->subpri);
+}
+
+/*
+ *  タスクのサブ優先度順のキューへの挿入（同サブ優先度の末尾）
+ *
+ *  p_tcbで指定されるタスクを，サブ優先度順で，p_queueで指定されるキュー
+ *  に挿入する．キューの中に同じサブ優先度のタスクがある場合には，それ
+ *  らの末尾に挿入する．
  */
 Inline void
-queue_insert_subprio(QUEUE *p_queue, TCB *p_tcb, bool_t mtxmode)
+queue_insert_subprio_tail(QUEUE *p_queue, TCB *p_tcb)
 {
 	QUEUE	*p_entry;
-	uint_t	subpri = p_tcb->subpri;
+	uint_t	subpri = current_subpri(p_tcb);
 
 	for (p_entry = p_queue->p_next; p_entry != p_queue;
 										p_entry = p_entry->p_next) {
-		if (mtxmode ? subpri <= ((TCB *) p_entry)->subpri
-					: subpri < ((TCB *) p_entry)->subpri) {
+		if (subpri < current_subpri((TCB *) p_entry)) {
+			break;
+		}
+	}
+	queue_insert_prev(p_entry, &(p_tcb->task_queue));
+}
+
+/*
+ *  タスクのサブ優先度順のキューへの挿入（同サブ優先度の先頭）
+ *
+ *  p_tcbで指定されるタスクを，サブ優先度順で，p_queueで指定されるキュー
+ *  に挿入する．キューの中に同じサブ優先度のタスクがある場合には，それ
+ *  らの先頭に挿入する．
+ */
+Inline void
+queue_insert_subprio_head(QUEUE *p_queue, TCB *p_tcb)
+{
+	QUEUE	*p_entry;
+	uint_t	subpri = current_subpri(p_tcb);
+
+	for (p_entry = p_queue->p_next; p_entry != p_queue;
+										p_entry = p_entry->p_next) {
+		if (subpri <= current_subpri((TCB *) p_entry)) {
 			break;
 		}
 	}
@@ -238,7 +271,10 @@ queue_insert_subprio(QUEUE *p_queue, TCB *p_tcb, bool_t mtxmode)
  *  実行できる状態への遷移
  *
  *  実行すべきタスクを更新するのは，実行できるタスクがなかった場合と，
- *  p_tcbの優先度が実行すべきタスクの優先度よりも高い場合である．
+ *  p_tcbで指定されるタスクの優先度が実行すべきタスクの優先度よりも高
+ *  い場合，p_tcbで指定されるタスクの優先度が実行すべきタスクの優先度
+ *  と同じ場合（この場合に更新が必要になるのは，実際には，サブ優先度を
+ *  使用している場合のみ）である．
  */
 #ifdef TOPPERS_tskrun
 
@@ -248,7 +284,7 @@ make_runnable(TCB *p_tcb)
 	uint_t	pri = p_tcb->priority;
 
 	if ((subprio_primap & PRIMAP_BIT(pri)) != 0U) {
-		queue_insert_subprio(&(ready_queue[pri]), p_tcb, false);
+		queue_insert_subprio_tail(&(ready_queue[pri]), p_tcb);
 	}
 	else {
 		queue_insert_prev(&(ready_queue[pri]), &(p_tcb->task_queue));
@@ -259,6 +295,9 @@ make_runnable(TCB *p_tcb)
 		if (p_schedtsk == (TCB *) NULL || pri < p_schedtsk->priority) {
 			p_schedtsk = p_tcb;
 		}
+		else if (pri == p_schedtsk->priority) {
+			p_schedtsk = (TCB *)(ready_queue[pri].p_next);
+		}
 	}
 }
 
@@ -267,10 +306,15 @@ make_runnable(TCB *p_tcb)
 /*
  *  実行できる状態から他の状態への遷移
  *
- *  実行すべきタスクを更新するのは，p_tcbが実行すべきタスクであった場合
- *  である．p_tcbと同じ優先度のタスクが他にある場合は，p_tcbの次のタス
- *  クが実行すべきタスクになる．そうでない場合は，レディキューをサーチ
- *  する必要がある．
+ *  実行すべきタスクを更新するのは，p_tcbで指定されるタスクが実行すべ
+ *  きタスクであった場合である．p_tcbで指定されるタスクと同じ優先度の
+ *  タスクが他にある場合は，そのタスクの次のタスクが実行すべきタスクに
+ *  なる．そうでない場合は，レディキューをサーチする必要がある．
+ *
+ *  自タスクに対してこの関数が呼ばれるのは，タスクディスパッチ可能状態
+ *  に限られる．またこの関数は，非タスクコンテキストから呼ばれることは
+ *  ないため，p_runtskとp_schedtskは必ず一致している．そのため，p_tcb
+ *  とp_schedtskが一致するときは，必ずタスクディスパッチ可能状態である．
  */
 #ifdef TOPPERS_tsknrun
 
@@ -312,6 +356,7 @@ make_dormant(TCB *p_tcb)
 	p_tcb->wupque = false;
 	p_tcb->raster = false;
 	p_tcb->enater = true;
+	p_tcb->boosted = false;
 	LOG_TSKSTAT(p_tcb);
 }
 
@@ -336,14 +381,17 @@ make_active(TCB *p_tcb)
 /*
  *  タスクの優先度の変更
  *
- *  タスクが実行できる状態の場合には，レディキューの中での位置を変更す
- *  る．オブジェクトの待ちキューの中で待ち状態になっている場合には，待
- *  ちキューの中での位置を変更する．
+ *  p_tcbで指定されるタスクが実行できる状態の場合には，レディキューの
+ *  中での位置を変更する．オブジェクトの待ちキューの中で待ち状態になっ
+ *  ている場合には，待ちキューの中での位置を変更する．
  *
- *  実行すべきタスクを更新するのは，(1) p_tcbが実行すべきタスクであって，
- *  その優先度を下げた場合，(2) p_tcbが実行すべきタスクではなく，変更後
- *  の優先度が実行すべきタスクの優先度よりも高い場合である．(1)の場合に
- *  は，レディキューをサーチする必要がある．
+ *  実行すべきタスクを更新するのは，(1) p_tcbで指定されるタスクが実行
+ *  すべきタスクであった場合には，優先度を下げた（または優先度が変わら
+ *  なかった）時，(2) p_tcbで指定されるタスクが実行すべきタスクでなかっ
+ *  た場合には，変更後の優先度が実行すべきタスクの優先度よりも高いか同
+ *  じ時（同じ場合に更新が必要になるのは，実際には，サブ優先度を使用し
+ *  ている場合と，mtxmodeがtrueの場合のみ）である．(1)の場合には，レディ
+ *  キューをサーチする必要がある．
  */
 #ifdef TOPPERS_tskpri
 
@@ -364,7 +412,12 @@ change_priority(TCB *p_tcb, uint_t newpri, bool_t mtxmode)
 			primap_clear(oldpri);
 		}
 		if ((subprio_primap & PRIMAP_BIT(newpri)) != 0U) {
-			queue_insert_subprio(&(ready_queue[newpri]), p_tcb, mtxmode);
+			if (mtxmode) {
+				queue_insert_subprio_head(&(ready_queue[newpri]), p_tcb);
+			}
+			else {
+				queue_insert_subprio_tail(&(ready_queue[newpri]), p_tcb);
+			}
 		}
 		else if (mtxmode) {
 			queue_insert_next(&(ready_queue[newpri]), &(p_tcb->task_queue));
@@ -381,9 +434,8 @@ change_priority(TCB *p_tcb, uint_t newpri, bool_t mtxmode)
 				}
 			}
 			else {
-				if (mtxmode ? newpri <= p_schedtsk->priority
-							: newpri < p_schedtsk->priority) {
-					p_schedtsk = p_tcb;
+				if (newpri <= p_schedtsk->priority) {
+					p_schedtsk = (TCB *)(ready_queue[newpri].p_next);
 				}
 			}
 		}
@@ -405,27 +457,22 @@ change_priority(TCB *p_tcb, uint_t newpri, bool_t mtxmode)
 /*
  *  タスクのサブ優先度の変更
  *
- *  タスクが実行できる状態で，タスクの現在優先度がサブ優先度を使用する
- *  と設定されている場合には，レディキューの中での位置を変更する．
- *
- *  サブ優先度を変更したタスクと，実行すべきタスクの優先度が同じ場合に，
- *  その優先度の中で優先順位が最も高いタスクを，実行すべきタスクとする．
+ *  p_tcbで指定されるタスクが実行できる状態で，そのタスクの現在優先度
+ *  がサブ優先度を使用すると設定されており，優先度上昇状態でない場合に
+ *  は，レディキューの中での位置を変更する．
  */
 #ifdef TOPPERS_tskspr
 
 void
 change_subprio(TCB *p_tcb, uint_t subpri)
 {
-	p_tcb->subpri = subpri;							/*［NGKI3672］*/
-	if (TSTAT_RUNNABLE(p_tcb->tstat)) {
-		if ((subprio_primap & PRIMAP_BIT(p_tcb->priority)) != 0U) {
-			queue_delete(&(p_tcb->task_queue));		/*［NGKI3673］*/
-			queue_insert_subprio(&(ready_queue[p_tcb->priority]), p_tcb, false);
-		}
-		if (dspflg) {
-			if (p_schedtsk->priority == p_tcb->priority) {
-				p_schedtsk = (TCB *)(ready_queue[p_tcb->priority].p_next);
-			}
+	uint_t	pri = p_tcb->priority;
+
+	queue_delete(&(p_tcb->task_queue));
+	queue_insert_subprio_tail(&(ready_queue[pri]), p_tcb);
+	if (dspflg) {
+		if (pri == p_schedtsk->priority) {
+			p_schedtsk = (TCB *)(ready_queue[pri].p_next);
 		}
 	}
 }

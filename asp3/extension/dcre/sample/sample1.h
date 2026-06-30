@@ -5,7 +5,7 @@
  *
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2004-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2004-2020 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  *
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  *
- *  $Id: sample1.h 725 2016-04-02 21:50:49Z ertl-hiro $
+ *  $Id: sample1.h 1437 2020-05-20 12:12:16Z ertl-hiro $
  */
 
 /*
@@ -75,9 +75,9 @@
 #define	STACK_SIZE		4096		/* タスクのスタックサイズ */
 #endif /* STACK_SIZE */
 
-#ifndef KMM_SIZE
-#define	KMM_SIZE		(STACK_SIZE * 16)	/* カーネルが割り付ける   */
-#endif /* KMM_SIZE */						/*     メモリ領域のサイズ */
+#ifndef MPK_SIZE					/* カーネルメモリプール領域のサイズ */
+#define	MPK_SIZE		(STACK_SIZE * 16)
+#endif /* MPK_SIZE */
 
 #ifndef LOOP_REF
 #define LOOP_REF		ULONG_C(1000000)	/* 速度計測用のループ回数 */
@@ -88,16 +88,16 @@
  */
 #ifndef TOPPERS_MACRO_ONLY
 
-extern void	task(intptr_t exinf);
-extern void	main_task(intptr_t exinf);
-extern void exc_task(intptr_t exinf);
+extern void	task(EXINF exinf);
+extern void	main_task(EXINF exinf);
+extern void exc_task(EXINF exinf);
 #ifdef INTNO1
-extern void intno1_isr(intptr_t exinf);
+extern void intno1_isr(EXINF exinf);
 #endif /* INTNO1 */
 #ifdef CPUEXC1
 extern void	cpuexc_handler(void *p_excinf);
 #endif /* CPUEXC1 */
-extern void	cyclic_handler(intptr_t exinf);
-extern void	alarm_handler(intptr_t exinf);
+extern void	cyclic_handler(EXINF exinf);
+extern void	alarm_handler(EXINF exinf);
 
 #endif /* TOPPERS_MACRO_ONLY */

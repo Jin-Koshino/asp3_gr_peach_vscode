@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2015 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2019 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: sys_manage.c 684 2016-03-11 15:24:12Z ertl-hiro $
+ *  $Id: sys_manage.c 1148 2019-01-14 02:55:56Z ertl-hiro $
  */
 
 /*
@@ -184,7 +184,7 @@ rot_rdq(PRI tskpri)
 			dispatch();
 		}
 		else {
-			request_dispatch();
+			request_dispatch_retint();
 		}
 	}
 	ercd = E_OK;
@@ -210,10 +210,8 @@ get_tid(ID *p_tskid)
 	LOG_GET_TID_ENTER(p_tskid);
 	CHECK_UNL();								/*［NGKI2707］*/
 
-	lock_cpu();
 	*p_tskid = (p_runtsk == NULL) ? TSK_NONE : TSKID(p_runtsk);
-	ercd = E_OK;
-	unlock_cpu();
+	ercd = E_OK;								/*［NGKI2710］［NGKI2709］*/
 
   error_exit:
 	LOG_GET_TID_LEAVE(ercd, p_tskid);
@@ -399,13 +397,11 @@ ena_dsp(void)
 	lock_cpu();
 	enadsp = true;
 	if (t_get_ipm() == TIPM_ENAALL) {
-		dspflg = true;
-		p_schedtsk = search_schedtsk();
+		set_dspflg();
 		if (p_runtsk->raster && p_runtsk->enater) {
 #ifdef TOPPERS_SUPPORT_OVRHDR
 			if (p_runtsk->staovr) {
 				(void) target_ovrtimer_stop();
-				ovrtimer_flag = false;
 			}
 #endif /* TOPPERS_SUPPORT_OVRHDR */
 			task_terminate(p_runtsk);

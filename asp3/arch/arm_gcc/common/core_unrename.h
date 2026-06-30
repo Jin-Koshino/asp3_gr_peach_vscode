@@ -31,12 +31,36 @@
  */
 #undef excpt_nest_count
 #undef arm_mmu_initialize
+#undef arm_fpu_initialize
 #undef core_initialize
 #undef core_terminate
 #undef xlog_sys
 #undef xlog_fsr
 #undef default_int_handler
 #undef default_exc_handler
+
+/*
+ *  core_kernel_impl.h
+ */
+#undef lock_cpu
+#undef unlock_cpu
+#undef sense_lock
+
+/*
+ *  mpcore_kernel_impl.c
+ */
+#undef mpcore_initialize
+#undef mpcore_terminate
+
+/*
+ *  mpcore_timer.c
+ */
+#undef target_hrt_initialize
+#undef target_hrt_terminate
+#undef target_hrt_handler
+#undef target_ovrtimer_initialize
+#undef target_ovrtimer_terminate
+#undef target_ovrtimer_handler
 
 /*
  *  gic_kernel_impl.c
@@ -62,12 +86,6 @@
 #undef pl310_disable
 #undef pl310_invalidate_all
 #undef pl310_clean_and_invalidate_all
-
-/*
- *  target_kernel_impl.c
- */
-#undef arm_tnum_memory_area
-#undef arm_memory_area
 
 
 #endif /* TOPPERS_CORE_RENAME_H */

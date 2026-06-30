@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2025 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: time_event.c 532 2016-01-15 14:48:04Z ertl-hiro $
+ *  $Id: time_event.c 1853 2025-10-30 14:12:22Z ertl-hiro $
  */
 
 /*
@@ -48,6 +48,13 @@
 #include "time_event.h"
 
 /*
+ *  TCYC_HRTCNTの定義のチェック
+ */
+#if defined(USE_64BIT_HRTCNT) && defined(TCYC_HRTCNT)
+#error TCYC_HRTCNT must not be defined when USE_64BIT_HRTCNT.
+#endif
+
+/*
  *  TSTEP_HRTCNTの範囲チェック
  */
 #if TSTEP_HRTCNT > 4000U
@@ -55,8 +62,10 @@
 #endif /* TSTEP_HRTCNT > 4000U */
 
 /*
- *  HRTCNT_BOUNDの範囲チェック
+ *  HRTCNT_BOUNDの定義のチェック
  */
+#ifndef USE_64BIT_HRTCNT
+
 #if HRTCNT_BOUND >= 4294000000U
 #error HRTCNT_BOUND is too large.
 #endif /* HRTCNT_BOUND >= 4294000000U */
@@ -67,23 +76,27 @@
 #endif /* HRTCNT_BOUND >= TCYC_HRTCNT */
 #endif /* TCYC_HRTCNT */
 
+#else /* USE_64BIT_HRTCNT */
+
+#ifdef HRTCNT_BOUND
+#error USE_64BIT_HRTCNT is not supported on this target.
+#endif /* HRTCNT_BOUND */
+
+#endif /* USE_64BIT_HRTCNT */
+
 /*
  *  タイムイベントヒープ操作マクロ
  */
-#define PARENT(p_tmevtn)	(tmevt_heap + (((p_tmevtn) - tmevt_heap) >> 1))
-													/* 親ノードを求める */
-#define LCHILD(p_tmevtn)	(tmevt_heap + (((p_tmevtn) - tmevt_heap) << 1))
-													/* 左の子ノードを求める */
+#define	ROOT_INDEX			(1)					/* ルートノードのインデックス */
+#define	PARENT(index)		((index) >> 1)		/* 親ノードを求める */
+#define	LCHILD(index)		((index) << 1)		/* 左の子ノードを求める */
+#define	LAST_INDEX()		(tmevt_heap[0].last_index)
+#define	HEAP_NODE(index)	(tmevt_heap[index].p_tmevtb)
+
 /*
- *  タイムイベントヒープ中の先頭のノード
+ *  タイムイベントヒープ中の先頭のタイムイベントの発生時刻
  */
-#define p_top_tmevtn	(&(tmevt_heap[1]))
-#define top_evttim		(tmevt_heap[1].p_tmevtb->evttim)
-										/* 先頭のタイムイベントの発生時刻 */
-/*
- *  タイムイベントヒープ中の最後のノード
- */
-#define p_last_tmevtn	(tmevt_heap[0].p_last)
+#define top_evttim()		(HEAP_NODE(ROOT_INDEX)->evttim)
 
 /*
  *  イベント時刻の前後関係の判定［ASPD1009］
@@ -156,7 +169,7 @@ initialize_tmevt(void)
 	evttim_step_frac = 999999U;
 	systim_offset = 0U;								/*［ASPD1044］*/
 	in_signal_time = false;							/*［ASPD1033］*/
-	p_last_tmevtn = tmevt_heap;
+	LAST_INDEX() = 0;
 }
 
 #endif /* TOPPERS_tmeini */
@@ -166,37 +179,37 @@ initialize_tmevt(void)
  *
  *  時刻evttimに発生するタイムイベントを挿入するノードを空けるために，
  *  ヒープの上に向かって空ノードを移動させる．移動前の空ノードの位置を
- *  p_tmevtnに渡すと，移動後の空ノードの位置（すなわち挿入位置）を返す．
+ *  indexに渡すと，移動後の空ノードの位置（すなわち挿入位置）を返す．
  */
 #ifdef TOPPERS_tmeup
 
-TMEVTN *
-tmevt_up(TMEVTN *p_tmevtn, EVTTIM evttim)
+uint_t
+tmevt_up(uint_t index, EVTTIM evttim)
 {
-	TMEVTN	*p_parent;
+	uint_t	parent;
 
-	while (p_tmevtn > p_top_tmevtn) {
+	while (index > ROOT_INDEX) {
 		/*
 		 *  親ノードのイベント発生時刻の方が早い（または同じ）ならば，
-		 *  p_tmevtnが挿入位置なのでループを抜ける．
+		 *  indexが挿入位置なのでループを抜ける．
 		 */
-		p_parent = PARENT(p_tmevtn);
-		if (EVTTIM_LE(p_parent->p_tmevtb->evttim, evttim)) {
+		parent = PARENT(index);
+		if (EVTTIM_LE(HEAP_NODE(parent)->evttim, evttim)) {
 			break;
 		}
 
 		/*
-		 *  親ノードをp_tmevtnの位置に移動させる．
+		 *  親ノードをindexの位置に移動させる．
 		 */
-		*p_tmevtn = *p_parent;
-		p_tmevtn->p_tmevtb->p_tmevtn = p_tmevtn;
+		HEAP_NODE(index) = HEAP_NODE(parent);
+		HEAP_NODE(index)->index = index;
 
 		/*
-		 *  p_tmevtnを親ノードの位置に更新．
+		 *  indexを親ノードの位置に更新．
 		 */
-		p_tmevtn = p_parent;
+		index = parent;
 	}
-	return(p_tmevtn);
+	return(index);
 }
 
 #endif /* TOPPERS_tmeup */
@@ -206,47 +219,47 @@ tmevt_up(TMEVTN *p_tmevtn, EVTTIM evttim)
  *
  *  時刻evttimに発生するタイムイベントを挿入するノードを空けるために，
  *  ヒープの下に向かって空ノードを移動させる．移動前の空ノードの位置を
- *  p_tmevtnに渡すと，移動後の空ノードの位置（すなわち挿入位置）を返す．
+ *  indexに渡すと，移動後の空ノードの位置（すなわち挿入位置）を返す．
  */
 #ifdef TOPPERS_tmedown
 
-TMEVTN *
-tmevt_down(TMEVTN *p_tmevtn, EVTTIM evttim)
+uint_t
+tmevt_down(uint_t index, EVTTIM evttim)
 {
-	TMEVTN	*p_child;
+	uint_t	child;
 
-	while ((p_child = LCHILD(p_tmevtn)) <= p_last_tmevtn) {
+	while ((child = LCHILD(index)) <= LAST_INDEX()) {
 		/*
 		 *  左右の子ノードのイベント発生時刻を比較し，早い方の子ノード
-		 *  の位置をp_childに設定する．以下の子ノードは，ここで選ばれた
+		 *  の位置をchildに設定する．以下の子ノードは，ここで選ばれた
 		 *  方の子ノードのこと．
 		 */
-		if (p_child + 1 <= p_last_tmevtn
-					&& EVTTIM_LT((p_child + 1)->p_tmevtb->evttim,
-											p_child->p_tmevtb->evttim)) {
-			p_child = p_child + 1;
+		if (child + 1 <= LAST_INDEX()
+					&& EVTTIM_LT(HEAP_NODE(child + 1)->evttim,
+										HEAP_NODE(child)->evttim)) {
+			child = child + 1;
 		}
 
 		/*
 		 *  子ノードのイベント発生時刻の方が遅い（または同じ）ならば，
-		 *  p_tmevtnが挿入位置なのでループを抜ける．
+		 *  indexが挿入位置なのでループを抜ける．
 		 */
-		if (EVTTIM_LE(evttim, p_child->p_tmevtb->evttim)) {
+		if (EVTTIM_LE(evttim, HEAP_NODE(child)->evttim)) {
 			break;
 		}
 
 		/*
-		 *  子ノードをp_tmevtnの位置に移動させる．
+		 *  子ノードをindexの位置に移動させる．
 		 */
-		*p_tmevtn = *p_child;
-		p_tmevtn->p_tmevtb->p_tmevtn = p_tmevtn;
+		HEAP_NODE(index) = HEAP_NODE(child);
+		HEAP_NODE(index)->index = index;
 
 		/*
-		 *  p_tmevtnを子ノードの位置に更新．
+		 *  indexを子ノードの位置に更新．
 		 */
-		p_tmevtn = p_child;
+		index = child;
 	}
-	return(p_tmevtn);
+	return(index);
 }
 
 #endif /* TOPPERS_tmedown */
@@ -260,18 +273,18 @@ tmevt_down(TMEVTN *p_tmevtn, EVTTIM evttim)
 Inline void
 tmevtb_insert(TMEVTB *p_tmevtb)
 {
-	TMEVTN	*p_tmevtn;
+	uint_t	index;
 
 	/*
-	 *  p_last_tmevtnをインクリメントし，そこから上に挿入位置を探す．
+	 *  last_indexをインクリメントし，そこから上に挿入位置を探す．
 	 */
-	p_tmevtn = tmevt_up(++p_last_tmevtn, p_tmevtb->evttim);
+	index = tmevt_up(++LAST_INDEX(), p_tmevtb->evttim);
 
 	/*
-	 *  タイムイベントをp_tmevtnの位置に挿入する．
+	 *  タイムイベントをindexの位置に挿入する．
 	 */ 
-	p_tmevtn->p_tmevtb = p_tmevtb;
-	p_tmevtb->p_tmevtn = p_tmevtn;
+	HEAP_NODE(index) = p_tmevtb;
+	p_tmevtb->index = index;
 }
 
 /*
@@ -280,55 +293,55 @@ tmevtb_insert(TMEVTB *p_tmevtb)
 Inline void
 tmevtb_delete(TMEVTB *p_tmevtb)
 {
-	TMEVTN	*p_tmevtn = p_tmevtb->p_tmevtn;
-	TMEVTN	*p_parent;
+	uint_t	index = p_tmevtb->index;
+	uint_t	last_index = LAST_INDEX();
+	uint_t	parent;
 	EVTTIM	event_evttim;
 
 	/*
 	 *  削除によりタイムイベントヒープが空になる場合は何もしない．
 	 */
-	if (--p_last_tmevtn < p_top_tmevtn) {
-		return;
-	}
-
-	/*
-	 *  削除したノードの位置に最後のノード（p_last_tmevtn + 1 の位置の
-	 *  ノード）を挿入し，それを適切な位置へ移動させる．実際には，最後
-	 *  のノードを実際に挿入するのではなく，削除したノードの位置が空ノー
-	 *  ドになるので，最後のノードを挿入すべき位置へ向けて空ノードを移
-	 *  動させる．
-	 *
-	 *  最後のノードのイベント発生時刻が，削除したノードの親ノードのイ
-	 *  ベント発生時刻より前の場合には，上に向かって挿入位置を探す．そ
-	 *  うでない場合には，下に向かって探す．
-	 */
-	event_evttim = (p_last_tmevtn + 1)->p_tmevtb->evttim;
-	if (p_tmevtn > p_top_tmevtn
-			&& EVTTIM_LT(event_evttim,
-						(p_parent = PARENT(p_tmevtn))->p_tmevtb->evttim)) {
+	if (--LAST_INDEX() > 0) {
 		/*
-		 *  親ノードをp_tmevtnの位置に移動させる．
+		 *  削除したノードの位置に最後のノード（last_index+1の位置のノー
+		 *  ド）を挿入し，それを適切な位置へ移動させる．実際には，最後
+		 *  のノードを実際に挿入するのではなく，削除したノードの位置が
+		 *  空ノードになるので，最後のノードを挿入すべき位置へ向けて空
+		 *  ノードを移動させる．
+		 *
+		 *  最後のノードのイベント発生時刻が，削除したノードの親ノード
+		 *  のイベント発生時刻より前の場合には，上に向かって挿入位置を
+		 *  探す．そうでない場合には，下に向かって探す．
 		 */
-		*p_tmevtn = *p_parent;
-		p_tmevtn->p_tmevtb->p_tmevtn = p_tmevtn;
+		event_evttim = HEAP_NODE(last_index)->evttim;
+		if (index > ROOT_INDEX
+				&& EVTTIM_LT(event_evttim,
+							HEAP_NODE(parent = PARENT(index))->evttim)) {
+
+			/*
+			 *  親ノードをindexの位置に移動させる．
+			 */
+			HEAP_NODE(index) = HEAP_NODE(parent);
+			HEAP_NODE(index)->index = index;
+
+			/*
+			 *  削除したノードの親ノードから上に向かって挿入位置を探す．
+			 */
+			index = tmevt_up(parent, event_evttim);
+		}
+		else {
+			/*
+			 *  削除したノードから下に向かって挿入位置を探す．
+			 */
+			index = tmevt_down(index, event_evttim);
+		}
 
 		/*
-		 *  削除したノードの親ノードから上に向かって挿入位置を探す．
-		 */
-		p_tmevtn = tmevt_up(p_parent, event_evttim);
+		 *  最後のノードをindexの位置に挿入する．
+		 */ 
+		HEAP_NODE(index) = HEAP_NODE(last_index);
+		HEAP_NODE(index)->index = index;
 	}
-	else {
-		/*
-		 *  削除したノードから下に向かって挿入位置を探す．
-		 */
-		p_tmevtn = tmevt_down(p_tmevtn, event_evttim);
-	}
-
-	/*
-	 *  最後のノードをp_tmevtnの位置に挿入する．
-	 */ 
-	*p_tmevtn = *(p_last_tmevtn + 1);
-	p_tmevtn->p_tmevtb->p_tmevtn = p_tmevtn;
 }
 
 /*
@@ -337,29 +350,29 @@ tmevtb_delete(TMEVTB *p_tmevtb)
 Inline TMEVTB *
 tmevtb_delete_top(void)
 {
-	TMEVTN	*p_tmevtn;
-	TMEVTB	*p_top_tmevtb = p_top_tmevtn->p_tmevtb;
+	uint_t	index;
+	uint_t	last_index = LAST_INDEX();
+	TMEVTB	*p_top_tmevtb = HEAP_NODE(ROOT_INDEX);
 	EVTTIM	event_evttim;
 
 	/*
 	 *  削除によりタイムイベントヒープが空になる場合は何もしない．
 	 */
-	if (--p_last_tmevtn >= p_top_tmevtn) {
+	if (--LAST_INDEX() > 0) {
 		/*
-		 *  ルートノードに最後のノード（p_last_tmevtn + 1 の位置のノー
-		 *  ド）を挿入し，それを適切な位置へ移動させる．実際には，最後
-		 *  のノードを実際に挿入するのではなく，ルートノードが空ノード
-		 *  になるので，最後のノードを挿入すべき位置へ向けて空ノードを
-		 *  移動させる．
+		 *  ルートに最後のノード（last_index+1の位置のノード）を挿入し，
+		 *  それを適切な位置へ移動させる．実際には，最後のノードを実際
+		 *  に挿入するのではなく，ルートノードが空ノードになるので，最
+		 *  後のノードを挿入すべき位置へ向けて空ノードを移動させる．
 		 */
-		event_evttim = (p_last_tmevtn + 1)->p_tmevtb->evttim;
-		p_tmevtn = tmevt_down(p_top_tmevtn, event_evttim);
+		event_evttim = HEAP_NODE(last_index)->evttim;
+		index = tmevt_down(ROOT_INDEX, event_evttim);
 
 		/*
-		 *  最後のノードをp_tmevtnの位置に挿入する．
+		 *  最後のノードをindexの位置に挿入する．
 		 */ 
-		*p_tmevtn = *(p_last_tmevtn + 1);
-		p_tmevtn->p_tmevtb->p_tmevtn = p_tmevtn;
+		HEAP_NODE(index) = HEAP_NODE(last_index);
+		HEAP_NODE(index)->index = index;
 	}
 	return(p_top_tmevtb);
 }
@@ -382,6 +395,7 @@ update_current_evttim(void)
 		hrtcnt_advance += TCYC_HRTCNT;
 	}
 #endif /* TCYC_HRTCNT */
+	current_hrtcnt = new_hrtcnt;					/*［ASPD1016］*/
 
 #ifdef USE_64BIT_OPS
 	evttim_advance = ((uint64_t) hrtcnt_advance) * drift_rate / 1000000U;
@@ -414,7 +428,6 @@ update_current_evttim(void)
 
 	previous_evttim = current_evttim;
 	current_evttim += evttim_advance;
-	current_hrtcnt = new_hrtcnt;					/*［ASPD1016］*/
 	boundary_evttim = current_evttim - BOUNDARY_MARGIN;	/*［ASPD1011］*/
 
 	if (monotonic_evttim - previous_evttim < evttim_advance) {
@@ -457,13 +470,33 @@ set_hrt_event(void)
 	EVTTIM	evttim_advance;
 	HRTCNT	hrtcnt;
 
-	if (p_last_tmevtn >= p_top_tmevtn
-						&& EVTTIM_LE(top_evttim, current_evttim)) {
+	if (LAST_INDEX() > 0 && EVTTIM_LE(top_evttim(), current_evttim)) {
 		target_hrt_raise_event();
 	}
 	else {
-		if (p_last_tmevtn >= p_top_tmevtn) {
-			evttim_advance = top_evttim - current_evttim;
+#ifdef USE_64BIT_HRTCNT
+		/*
+		 *  HRTCNTが64ビットの場合
+		 */
+		if (LAST_INDEX() == 0) {
+			/*
+			 *  タイムイベントがない場合
+			 */
+			target_hrt_clear_event();
+		}
+		else {
+			evttim_advance = top_evttim() - current_evttim;
+			hrtcnt = (((uint64_t) evttim_advance) * 1000000U
+						- current_evttim_frac + drift_rate - 1U) / drift_rate;
+			target_hrt_set_event(hrtcnt);
+		}
+
+#else /* USE_64BIT_HRTCNT */
+		/*
+		 *  HRTCNTが32ビットの場合
+		 */
+		if (LAST_INDEX() > 0) {
+			evttim_advance = top_evttim() - current_evttim;
 		}
 		else {
 			evttim_advance = TMAX_RELTIM;
@@ -501,6 +534,7 @@ set_hrt_event(void)
 		}
 #endif /* USE_64BIT_OPS */
 		target_hrt_set_event(hrtcnt);
+#endif /* USE_64BIT_HRTCNT */
 	}
 }
 
@@ -523,10 +557,10 @@ tmevtb_register(TMEVTB *p_tmevtb)
  *  相対時間指定によるタイムイベントの登録
  *  
  */
-#ifdef TOPPERS_tmeenq
+#ifdef TOPPERS_tmeenqrel
 
 void
-tmevtb_enqueue(TMEVTB *p_tmevtb, RELTIM time)
+tmevtb_enqueue_reltim(TMEVTB *p_tmevtb, RELTIM time)
 {
 	/*
 	 *  現在のイベント時刻とタイムイベントの発生時刻を求める［ASPD1026］．
@@ -543,12 +577,12 @@ tmevtb_enqueue(TMEVTB *p_tmevtb, RELTIM time)
 	 *  高分解能タイマ割込みの発生タイミングを設定する［ASPD1031］
 	 *  ［ASPD1034］．
 	 */
-	if (!in_signal_time && p_tmevtb->p_tmevtn == p_top_tmevtn) {
+	if (!in_signal_time && p_tmevtb->index == ROOT_INDEX) {
 		set_hrt_event();
 	}
 }
 
-#endif /* TOPPERS_tmeenq */
+#endif /* TOPPERS_tmeenqrel */
 
 /*
  *  タイムイベントの登録解除
@@ -558,18 +592,17 @@ tmevtb_enqueue(TMEVTB *p_tmevtb, RELTIM time)
 void
 tmevtb_dequeue(TMEVTB *p_tmevtb)
 {
-	TMEVTN	*p_tmevtn;
+	uint_t	index = p_tmevtb->index;
 
 	/*
 	 *  タイムイベントブロックをヒープから削除する［ASPD1039］．
 	 */
-	p_tmevtn = p_tmevtb->p_tmevtn;
 	tmevtb_delete(p_tmevtb);
 
 	/*
 	 *  高分解能タイマ割込みの発生タイミングを設定する［ASPD1040］．
 	 */
-	if (!in_signal_time && p_tmevtn == p_top_tmevtn) {
+	if (!in_signal_time && index == ROOT_INDEX) {
 		update_current_evttim();
 		set_hrt_event();
 	}
@@ -583,11 +616,11 @@ tmevtb_dequeue(TMEVTB *p_tmevtb)
 #ifdef TOPPERS_tmechk
 
 bool_t
-check_adjtim(int_t adjtim)
+check_adjtim(int32_t adjtim)
 {
 	if (adjtim > 0) {
-		return(p_last_tmevtn >= p_top_tmevtn	/*［NGKI3588］*/
-					&& EVTTIM_LE(top_evttim, current_evttim - TMAX_ADJTIM));
+		return(LAST_INDEX() > 0					/*［NGKI3588］*/
+					&& EVTTIM_LE(top_evttim() + TMAX_ADJTIM, current_evttim));
 	}
 	else if (adjtim < 0) {						/*［NGKI3589］*/
 		return(monotonic_evttim - current_evttim >= -TMIN_ADJTIM);
@@ -640,6 +673,9 @@ signal_time(void)
 {
 	TMEVTB	*p_tmevtb;
 	bool_t	callflag;
+#ifndef TOPPERS_OMIT_SYSLOG
+	uint_t	nocall = 0;
+#endif /* TOPPERS_OMIT_SYSLOG */
 
 	assert(sense_context());
 	assert(!sense_lock());
@@ -663,13 +699,24 @@ signal_time(void)
 		 *  ムイベントヒープから削除し，コールバック関数を呼び出す
 		 *  ［ASPD1018］［ASPD1019］．
 		 */
-		while (p_last_tmevtn >= p_top_tmevtn
-							&& EVTTIM_LE(top_evttim, current_evttim)) {
+		while (LAST_INDEX() > 0 && EVTTIM_LE(top_evttim(), current_evttim)) {
 			p_tmevtb = tmevtb_delete_top();
 			(*(p_tmevtb->callback))(p_tmevtb->arg);
 			callflag = true;
+#ifndef TOPPERS_OMIT_SYSLOG
+			nocall += 1;
+#endif /* TOPPERS_OMIT_SYSLOG */
 		}
 	} while (callflag);								/*［ASPD1020］*/
+
+#ifndef TOPPERS_OMIT_SYSLOG
+	/*
+	 *  タイムイベントが処理されなかった場合．
+	 */
+	if (nocall == 0) {
+		syslog_0(LOG_NOTICE, "no time event is processed in hrt interrupt.");
+	}
+#endif /* TOPPERS_OMIT_SYSLOG */
 
 	/*
 	 *  高分解能タイマ割込みの発生タイミングを設定する［ASPD1025］．

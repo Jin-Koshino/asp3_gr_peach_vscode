@@ -32,7 +32,6 @@
  *  taskhook.c
  */
 #define mtxhook_check_ceilpri		_kernel_mtxhook_check_ceilpri
-#define mtxhook_scan_ceilmtx		_kernel_mtxhook_scan_ceilmtx
 #define mtxhook_release_all			_kernel_mtxhook_release_all
 
 /*
@@ -61,7 +60,7 @@
 #define update_current_evttim		_kernel_update_current_evttim
 #define set_hrt_event				_kernel_set_hrt_event
 #define tmevtb_register				_kernel_tmevtb_register
-#define tmevtb_enqueue				_kernel_tmevtb_enqueue
+#define tmevtb_enqueue_reltim		_kernel_tmevtb_enqueue_reltim
 #define tmevtb_dequeue				_kernel_tmevtb_dequeue
 #define check_adjtim				_kernel_check_adjtim
 #define tmevt_lefttim				_kernel_tmevt_lefttim
@@ -103,8 +102,6 @@
  */
 #define initialize_mutex			_kernel_initialize_mutex
 #define mutex_check_ceilpri			_kernel_mutex_check_ceilpri
-#define mutex_scan_ceilmtx			_kernel_mutex_scan_ceilmtx
-#define mutex_drop_priority			_kernel_mutex_drop_priority
 #define mutex_acquire				_kernel_mutex_acquire
 #define mutex_release				_kernel_mutex_release
 #define mutex_release_all			_kernel_mutex_release_all
@@ -130,8 +127,6 @@
 /*
  *  overrun.c
  */
-#define ovrtimer_flag				_kernel_ovrtimer_flag
-#define initialize_overrun			_kernel_initialize_overrun
 #define ovrtimer_start				_kernel_ovrtimer_start
 #define ovrtimer_stop				_kernel_ovrtimer_stop
 #define call_ovrhdr					_kernel_call_ovrhdr
@@ -150,8 +145,10 @@
  *  kernel_cfg.c
  */
 #define initialize_object			_kernel_initialize_object
-#define call_inirtn					_kernel_call_inirtn
-#define call_terrtn					_kernel_call_terrtn
+#define tnum_inirtn					_kernel_tnum_inirtn
+#define inirtnb_table				_kernel_inirtnb_table
+#define tnum_terrtn					_kernel_tnum_terrtn
+#define terrtnb_table				_kernel_terrtnb_table
 #define tmax_tskid					_kernel_tmax_tskid
 #define tinib_table					_kernel_tinib_table
 #define torder_table				_kernel_torder_table
@@ -191,6 +188,16 @@
 #define istksz						_kernel_istksz
 #define istk						_kernel_istk
 #define istkpt						_kernel_istkpt
+
+/*
+ *  tTraceLog.c
+ */
+#define log_dsp_enter				_kernel_log_dsp_enter
+#define log_dsp_leave				_kernel_log_dsp_leave
+#define log_inh_enter				_kernel_log_inh_enter
+#define log_inh_leave				_kernel_log_inh_leave
+#define log_exc_enter				_kernel_log_exc_enter
+#define log_exc_leave				_kernel_log_exc_leave
 
 
 #include "target_rename.h"

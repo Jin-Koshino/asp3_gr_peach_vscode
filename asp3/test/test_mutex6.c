@@ -2,7 +2,7 @@
  *  TOPPERS Software
  *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
- *  Copyright (C) 2007-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2007-2018 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -34,7 +34,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: test_mutex6.c 756 2016-10-03 10:47:38Z ertl-hiro $
+ *  $Id: test_mutex6.c 1614 2022-09-16 20:21:17Z ertl-hiro $
  */
 
 /* 
@@ -56,9 +56,9 @@
  *			  れること．
  *		(A-4) ロックしていたミューテックス（複数）がロック解除され，ロッ
  *			  クを待っていたタスク（複数）がそれをロックし，優先度が変
- *			  化し，待ち解除されること．その時に，後でミューテックスを
- *			  ロックしたタスク（先にロックしていたミューテックスを待っ
- *			  ていたタスク）の方が，優先順位が高くなること．
+ *			  化し，待ち解除されること．その時に，後にロックしていた
+ *			  ミューテックスを待っていたタスクの方が，優先順位が高くな
+ *			  ること．
  *	(B) タスクの優先順位の回転（rot_rdq）
  *		(B-1) TPRI_SELFを指定した時に，タスクのベース優先度の優先順位が
  *		　　　回転すること．
@@ -81,10 +81,10 @@
  *	(A-4)
  *		低優先度タスク（TASK2）に高優先度上限ミューテックス2つ（MTX1，
  *		MTX2）をこの順でロックさせ，別の低優先度タスク2つ（TASK3，
- *		TASK4）にそれぞれのロックを待たせた状態で，TASK2をext_tskすると，
- *		TASK3とTASK4が高優先度になって待ち解除されることを確認する．ま
- *		た，先にロックしていたミューテックス（MTX1）を待っていたタスク
- *		（TASK3）が，TASK4よりも優先順位が高くなることを確認する．
+ *		TASK4）にそれぞれのロックを待たせた状態で，TASK2をext_tskする
+ *		と，TASK3とTASK4が高優先度になって待ち解除されることを確認する．
+ *		また，後にロックしていたMTX2を待っていたTASK4が，TASK3よりも優
+ *		先順位が高くなることを確認する．
  *	(B-1)
  *		低優先度タスクが3つ（TASK2，TASK3，TASK4）が実行できる状態の時
  *		に，1つの低優先度タスク（TASK2）に高優先度上限ミューテックスを
@@ -106,7 +106,6 @@
  * 【テストシーケンス】
  *
  *	== TASK1（優先度：低）==
- *		call(set_bit_service(get_bit_mutex()))
  *	1:	act_tsk(TASK2)
  *	2:	rot_rdq(TPRI_SELF)
  *	//		低：TASK2→TASK1
@@ -222,19 +221,15 @@
 #include "kernel_cfg.h"
 #include "test_mutex6.h"
 
-extern ER	bit_mutex(void);
-
 /* DO NOT DELETE THIS LINE -- gentest depends on it. */
 
 void
-task1(intptr_t exinf)
+task1(EXINF exinf)
 {
 	ER_UINT	ercd;
 	T_RMTX	rmtx;
 
 	test_start(__FILE__);
-
-	set_bit_service(get_bit_mutex());
 
 	check_point(1);
 	ercd = act_tsk(TASK2);
@@ -319,7 +314,7 @@ task1(intptr_t exinf)
 static uint_t	task2_count = 0;
 
 void
-task2(intptr_t exinf)
+task2(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -393,7 +388,7 @@ task2(intptr_t exinf)
 }
 
 void
-task3(intptr_t exinf)
+task3(EXINF exinf)
 {
 	ER_UINT	ercd;
 	PRI		tskpri;
@@ -438,7 +433,7 @@ task3(intptr_t exinf)
 }
 
 void
-task4(intptr_t exinf)
+task4(EXINF exinf)
 {
 	ER_UINT	ercd;
 	PRI		tskpri;

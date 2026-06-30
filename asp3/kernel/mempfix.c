@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2015 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2023 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: mempfix.c 471 2015-12-30 10:03:16Z ertl-hiro $
+ *  $Id: mempfix.c 1790 2023-01-18 06:07:25Z ertl-hiro $
  */
 
 /*
@@ -114,12 +114,6 @@
 #define get_mpfcb(mpfid)	(&(mpfcb_table[INDEX_MPF(mpfid)]))
 
 /*
- *  特殊なインデックス値の定義
- */
-#define INDEX_NULL		(~0U)		/* 空きブロックリストの最後 */
-#define INDEX_ALLOC		(~1U)		/* 割当て済みのブロック */
-
-/*
  *  固定長メモリプール機能の初期化
  */
 #ifdef TOPPERS_mpfini
@@ -154,7 +148,7 @@ get_mpf_block(MPFCB *p_mpfcb, void **p_blk)
 
 	if (p_mpfcb->freelist != INDEX_NULL) {
 		blkidx = p_mpfcb->freelist;
-		p_mpfcb->freelist = (p_mpfcb->p_mpfinib->p_mpfmb + blkidx)->next;
+		p_mpfcb->freelist = p_mpfcb->p_mpfinib->p_mpfmb[blkidx].next;
 	}
 	else {
 		blkidx = p_mpfcb->unused;
@@ -163,7 +157,7 @@ get_mpf_block(MPFCB *p_mpfcb, void **p_blk)
 	*p_blk = (void *)((char *)(p_mpfcb->p_mpfinib->mpf)
 								+ p_mpfcb->p_mpfinib->blksz * blkidx);
 	p_mpfcb->fblkcnt--;
-	(p_mpfcb->p_mpfinib->p_mpfmb + blkidx)->next = INDEX_ALLOC;
+	p_mpfcb->p_mpfinib->p_mpfmb[blkidx].next = INDEX_ALLOC;
 }
 
 #endif /* TOPPERS_mpfget */
@@ -176,9 +170,9 @@ get_mpf_block(MPFCB *p_mpfcb, void **p_blk)
 ER
 get_mpf(ID mpfid, void **p_blk)
 {
-	MPFCB	*p_mpfcb;
-	WINFO_MPF winfo_mpf;
-	ER		ercd;
+	MPFCB		*p_mpfcb;
+	WINFO_MPF	winfo_mpf;
+	ER			ercd;
 
 	LOG_GET_MPF_ENTER(mpfid, p_blk);
 	CHECK_DISPATCH();
@@ -194,8 +188,8 @@ get_mpf(ID mpfid, void **p_blk)
 		ercd = E_OK;
 	}
 	else {
-		p_runtsk->tstat = TS_WAITING_MPF;
-		wobj_make_wait((WOBJCB *) p_mpfcb, (WINFO_WOBJ *) &winfo_mpf);
+		wobj_make_wait((WOBJCB *) p_mpfcb, TS_WAITING_MPF,
+											(WINFO_WOBJ *) &winfo_mpf);
 		dispatch();
 		ercd = winfo_mpf.winfo.wercd;
 		if (ercd == E_OK) {
@@ -252,10 +246,10 @@ pget_mpf(ID mpfid, void **p_blk)
 ER
 tget_mpf(ID mpfid, void **p_blk, TMO tmout)
 {
-	MPFCB	*p_mpfcb;
-	WINFO_MPF winfo_mpf;
-	TMEVTB	tmevtb;
-	ER		ercd;
+	MPFCB		*p_mpfcb;
+	WINFO_MPF	winfo_mpf;
+	TMEVTB		tmevtb;
+	ER			ercd;
 
 	LOG_TGET_MPF_ENTER(mpfid, p_blk, tmout);
 	CHECK_DISPATCH();
@@ -275,9 +269,8 @@ tget_mpf(ID mpfid, void **p_blk, TMO tmout)
 		ercd = E_TMOUT;
 	}
 	else {
-		p_runtsk->tstat = TS_WAITING_MPF;
-		wobj_make_wait_tmout((WOBJCB *) p_mpfcb, (WINFO_WOBJ *) &winfo_mpf,
-														&tmevtb, tmout);
+		wobj_make_wait_tmout((WOBJCB *) p_mpfcb, TS_WAITING_MPF,
+								(WINFO_WOBJ *) &winfo_mpf, &tmevtb, tmout);
 		dispatch();
 		ercd = winfo_mpf.winfo.wercd;
 		if (ercd == E_OK) {
@@ -306,7 +299,7 @@ rel_mpf(ID mpfid, void *blk)
 	uint_t	blkidx;
 	TCB		*p_tcb;
 	ER		ercd;
-    
+
 	LOG_REL_MPF_ENTER(mpfid, blk);
 	CHECK_TSKCTX_UNL();
 	CHECK_ID(VALID_MPFID(mpfid));
@@ -316,7 +309,7 @@ rel_mpf(ID mpfid, void *blk)
 	CHECK_PAR(blkoffset % p_mpfcb->p_mpfinib->blksz == 0U);
 	CHECK_PAR(blkoffset / p_mpfcb->p_mpfinib->blksz < p_mpfcb->unused);
 	blkidx = (uint_t)(blkoffset / p_mpfcb->p_mpfinib->blksz);
-	CHECK_PAR((p_mpfcb->p_mpfinib->p_mpfmb + blkidx)->next == INDEX_ALLOC);
+	CHECK_PAR(p_mpfcb->p_mpfinib->p_mpfmb[blkidx].next == INDEX_ALLOC);
 
 	lock_cpu();
 	if (!queue_empty(&(p_mpfcb->wait_queue))) {
@@ -330,7 +323,7 @@ rel_mpf(ID mpfid, void *blk)
 	}
 	else {
 		p_mpfcb->fblkcnt++;
-		(p_mpfcb->p_mpfinib->p_mpfmb + blkidx)->next = p_mpfcb->freelist;
+		p_mpfcb->p_mpfinib->p_mpfmb[blkidx].next = p_mpfcb->freelist;
 		p_mpfcb->freelist = blkidx;
 		ercd = E_OK;
 	}
@@ -353,7 +346,7 @@ ini_mpf(ID mpfid)
 {
 	MPFCB	*p_mpfcb;
 	ER		ercd;
-    
+
 	LOG_INI_MPF_ENTER(mpfid);
 	CHECK_TSKCTX_UNL();
 	CHECK_ID(VALID_MPFID(mpfid));
@@ -387,7 +380,7 @@ ref_mpf(ID mpfid, T_RMPF *pk_rmpf)
 {
 	MPFCB	*p_mpfcb;
 	ER		ercd;
-    
+
 	LOG_REF_MPF_ENTER(mpfid, pk_rmpf);
 	CHECK_TSKCTX_UNL();
 	CHECK_ID(VALID_MPFID(mpfid));

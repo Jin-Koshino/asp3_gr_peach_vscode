@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2006-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2006-2024 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: core_kernel_impl.h 664 2016-02-29 16:32:29Z ertl-hiro $
+ *  $Id: core_kernel_impl.h 1833 2024-06-02 16:09:51Z ertl-hiro $
  */
 
 /*
@@ -54,6 +54,13 @@
 #include "arm.h"
 
 /*
+ *  ターゲット依存のタスク属性（エラーチェック用）
+ */
+#ifdef USE_ARM_FPU_SELECTIVE
+#define TARGET_TSKATR		(TA_FPU)
+#endif /* USE_ARM_FPU_SELECTIVE */
+
+/*
  *  エラーチェック方法の指定
  */
 #define CHECK_STKSZ_ALIGN	8		/* スタックサイズのアライン単位 */
@@ -67,6 +74,9 @@
 #define CHECK_STACK_NONNULL			/* スタック領域の非NULLチェック */
 #define CHECK_MPF_ALIGN		4		/* 固定長メモリプール領域のアライン単位 */
 #define CHECK_MPF_NONNULL			/* 固定長メモリプール領域の非NULLチェック */
+#define CHECK_MPK_ALIGN		4		/* カーネルメモリプール領域のアライン単位 */
+#define CHECK_MPK_NONNULL			/* カーネルメモリプール領域の非NULL  */
+									/*							チェック */
 #define CHECK_MB_ALIGN		4		/* 管理領域のアライン単位 */
 
 #ifndef TOPPERS_MACRO_ONLY
@@ -175,7 +185,7 @@ lock_cpu(void)
 #ifndef TOPPERS_SAFEG_SECURE
 	disable_irq();
 #else /* TOPPERS_SAFEG_SECURE */
-	disable_fiq()
+	disable_fiq();
 #endif /* TOPPERS_SAFEG_SECURE */
 #endif /* __TARGET_ARCH_ARM < 6 */
 
@@ -207,7 +217,7 @@ unlock_cpu(void)
 #ifndef TOPPERS_SAFEG_SECURE
 	enable_irq();
 #else /* TOPPERS_SAFEG_SECURE */
-	enable_fiq()
+	enable_fiq();
 #endif /* TOPPERS_SAFEG_SECURE */
 #endif /* __TARGET_ARCH_ARM < 6 */
 }
@@ -268,7 +278,7 @@ extern void dispatch(void);
 /*
  *  非タスクコンテキストからのディスパッチ要求
  */
-#define request_dispatch()
+#define request_dispatch_retint()
 
 /*
  *  ディスパッチャの動作開始（core_support.S）
@@ -323,7 +333,7 @@ extern void start_r(void);
 /*
  *  割込みハンドラテーブル（kernel_cfg.c）
  */
-extern const FP inh_table[TNUM_INHNO];
+extern const FP inh_table[TMAX_INHNO + 1];
 
 /*
  *  割込み要求ライン設定テーブル（kernel_cfg.c）
@@ -332,7 +342,7 @@ extern const FP inh_table[TNUM_INHNO];
  *  なければ0を保持するテーブル．
  */
 #ifdef USE_INTCFG_TABLE
-extern const uint8_t intcfg_table[TNUM_INTNO];
+extern const uint8_t intcfg_table[TMAX_INTNO + 1];
 #endif /* USE_INTCFG_TABLE */
 
 /*
@@ -341,9 +351,14 @@ extern const uint8_t intcfg_table[TNUM_INTNO];
 #define OMIT_INITIALIZE_EXCEPTION
 
 /*
+ *  CPU例外ハンドラ番号の最大値
+ */  
+#define TMAX_EXCNO		6
+
+/*
  *  CPU例外ハンドラテーブル（kernel_cfg.c）
  */
-extern const FP exc_table[TNUM_EXCNO];
+extern const FP exc_table[TMAX_EXCNO + 1];
 
 /*
  *  CPU例外ハンドラの初期化
@@ -367,6 +382,10 @@ exc_sense_context(void *p_excinf)
 
 /*
  *  CPU例外の発生した時の割込み優先度マスクの参照
+ *
+ *  この関数は，CPU例外がタスクコンテキストで発生した場合にのみ呼び出
+ *  される．そのため，CPU例外が非タスクコンテキストで発生した場合には，
+ *  正しい値を返す必要がない．
  */
 Inline PRI
 exc_get_intpri(void *p_excinf)
@@ -382,7 +401,6 @@ exc_sense_lock(void *p_excinf)
 {
 #ifndef TOPPERS_SAFEG_SECURE
 	return(((((T_EXCINF *)(p_excinf))->cpsr) & CPSR_INT_MASK) != 0U);
-#define CPSR_UNLOCK			UINT_C(0x00)
 #else /* TOPPERS_SAFEG_SECURE */
 	return(((((T_EXCINF *)(p_excinf))->cpsr) & CPSR_FIQ_BIT) != 0U);
 #endif /* TOPPERS_SAFEG_SECURE */
@@ -446,7 +464,7 @@ extern const uint_t arm_tnum_memory_area;
 /*
  *  MMUの設定情報（メモリエリアの情報）（target_kernel_impl.c）
  */
-extern ARM_MMU_CONFIG arm_memory_area[];
+extern const ARM_MMU_CONFIG arm_memory_area[];
 
 /*
  *  MMUの初期化
@@ -487,4 +505,18 @@ extern void default_int_handler(void);
 extern void default_exc_handler(void *p_excinf, EXCNO excno);
 
 #endif /* TOPPERS_MACRO_ONLY */
+
+/*
+ *  整合性検査のための定義
+ *
+ *  保存されているスタックポインタが，4バイト境界にアラインし，スタッ
+ *  ク上を指しているかをチェックする．
+ *
+ *  VALID_TSKCTXBを，インライン関数ではなくマクロ定義としているのは，
+ *  この時点ではTCBが定義されていないためである．
+ */
+#define VALID_TSKCTXB(p_tskctxb, p_tcb)								\
+			((((uintptr_t)((p_tskctxb)->sp) & 0x03U) == 0U)			\
+				&& on_stack((p_tskctxb)->sp, 0, (p_tcb)->p_tinib))
+
 #endif /* TOPPERS_CORE_KERNEL_IMPL_H */

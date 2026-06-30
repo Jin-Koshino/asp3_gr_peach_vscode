@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2015 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2022 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: task.h 458 2015-08-21 14:59:09Z ertl-hiro $
+ *  $Id: task.h 1633 2022-09-23 09:27:28Z ertl-hiro $
  */
 
 /*
@@ -188,7 +188,7 @@ typedef struct mutex_control_block MTXCB;
  */
 typedef struct task_initialization_block {
 	ATR			tskatr;			/* タスク属性 */
-	intptr_t	exinf;			/* タスクの拡張情報 */
+	EXINF		exinf;			/* タスクの拡張情報 */
 	TASK		task;			/* タスクの起動番地 */
 	uint_t		ipriority;		/* タスクの起動時優先度（内部表現） */
 
@@ -216,7 +216,7 @@ typedef struct task_initialization_block {
  *  ・初期化後は常に有効：
  *  		p_tinib，tstat，actque, staovr, leftotm
  *  ・休止状態以外で有効（休止状態では初期値になっている）：
- *  		bpriority，priority，wupque，raster，enater，p_lastmtx
+ *  		bpriority，priority，wupque，raster，enater，boosted，p_lastmtx
  *  ・待ち状態（二重待ち状態を含む）で有効：
  *  		p_winfo
  *  ・実行できる状態と同期・通信オブジェクトに対する待ち状態で有効：
@@ -235,12 +235,13 @@ typedef struct task_control_block {
 #else /* UINT8_MAX */
 	BIT_FIELD_UINT	tstat : 8;		/* タスク状態（内部表現）*/
 	BIT_FIELD_UINT	bpriority : 8;	/* ベース優先度（内部表現）*/
-	BIT_FIELD_UINT	priority : 8	/* 現在の優先度（内部表現）*/;
+	BIT_FIELD_UINT	priority : 8;	/* 現在の優先度（内部表現）*/
 #endif /* UINT8_MAX */
 	BIT_FIELD_BOOL	actque : 1;		/* 起動要求キューイング */
 	BIT_FIELD_BOOL	wupque : 1;		/* 起床要求キューイング */
-	BIT_FIELD_BOOL	raster : 1;		/* タスク終了要求状態 */
+	BIT_FIELD_BOOL	raster : 1;		/* タスク終了要求フラグ */
 	BIT_FIELD_BOOL	enater : 1;		/* タスク終了許可状態 */
+	BIT_FIELD_BOOL	boosted : 1;	/* 優先度上昇状態 */
 #ifdef TOPPERS_SUPPORT_OVRHDR
 	BIT_FIELD_BOOL	staovr : 1;		/* オーバランハンドラ動作状態 */
 #endif /* TOPPERS_SUPPORT_OVRHDR */
@@ -374,9 +375,8 @@ extern TCB	*search_schedtsk(void);
 /*
  *  実行できる状態への遷移
  *
- *  p_tcbで指定されるタスクをレディキューに挿入する．レディキューに挿入
- *  したタスクの優先度が，実行すべきタスクの優先度よりも高い場合は，実
- *  行すべきタスクを更新する．
+ *  p_tcbで指定されるタスクをレディキューに挿入する．また，必要な場合
+ *  には，実行すべきタスクを更新する．
  */
 extern void	make_runnable(TCB *p_tcb);
 
@@ -388,6 +388,19 @@ extern void	make_runnable(TCB *p_tcb);
  *  る．
  */
 extern void	make_non_runnable(TCB *p_tcb);
+
+/*
+ *  タスクディスパッチ可能状態への遷移
+ *
+ *  タスクディスパッチ可能状態であることを示すフラグ（dspflg）をtrueに
+ *  し，実行すべきタスクを更新する．
+ */
+Inline void
+set_dspflg(void)
+{
+	dspflg = true;
+	p_schedtsk = search_schedtsk();
+}
 
 /*
  *  休止状態への遷移
@@ -411,16 +424,17 @@ extern void	make_active(TCB *p_tcb);
  *  p_tcbで指定されるタスクの優先度をnewpri（内部表現）に変更する．また，
  *  必要な場合には，実行すべきタスクを更新する．
  *
- *  p_tcbで指定されるタスクの優先順位は，優先度が同じタスクの中で，
- *  mtxmodeがfalseの時は最低，mtxmodeがtrueの時は最高とする．
+ *  p_tcbで指定されるタスクが実行できる状態である場合，その優先順位は，
+ *  優先度が同じタスクの中で，mtxmodeがfalseの時は最低，mtxmodeがtrue
+ *  の時は最高とする．
  */
 extern void	change_priority(TCB *p_tcb, uint_t newpri, bool_t mtxmode);
 
 /*
  *  レディキューの回転
  *
- *  レディキュー中の，p_queueで指定されるタスクキューを回転させる．また，
- *  必要な場合には，実行すべきタスクを更新する．
+ *  レディキュー中の，p_queueで指定されるタスクキューを回転させる．ま
+ *  た，必要な場合には，実行すべきタスクを更新する．
  */
 extern void	rotate_ready_queue(QUEUE *p_queue);
 

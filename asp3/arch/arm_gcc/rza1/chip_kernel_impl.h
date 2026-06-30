@@ -2,13 +2,13 @@
  *  TOPPERS/ASP Kernel
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
- *
+ * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2006-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2006-2022 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
- *
- *  上記著作権者は，以下の(1)～(4)の条件を満たす場合に限り，本ソフトウェ
+ * 
+ *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
  *  ア（本ソフトウェアを改変したものを含む．以下同じ）を使用・複製・改
  *  変・再配布（以下，利用と呼ぶ）することを無償で許諾する．
  *  (1) 本ソフトウェアをソースコードの形で利用する場合には，上記の著作
@@ -30,14 +30,14 @@
  *      また，本ソフトウェアのユーザまたはエンドユーザからのいかなる理
  *      由に基づく請求からも，上記著作権者およびTOPPERSプロジェクトを
  *      免責すること．
- *
+ * 
  *  本ソフトウェアは，無保証で提供されているものである．上記著作権者お
  *  よびTOPPERSプロジェクトは，本ソフトウェアに関して，特定の使用目的
  *  に対する適合性も含めて，いかなる保証も行わない．また，本ソフトウェ
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
- *
- *  $Id: chip_kernel_impl.h 720 2016-04-01 22:16:17Z ertl-hiro $
+ * 
+ *  $Id: chip_kernel_impl.h 1765 2022-12-24 12:19:44Z ertl-hiro $
  */
 
 /*
@@ -55,12 +55,19 @@
  *  RZ/A1のハードウェア資源の定義
  */
 #include "rza1.h"
+#include "pl310.h"
 
 /*
- *  MMUの使用に関する設定
+ *  デフォルトの非タスクコンテキスト用のスタック領域の定義
  */
-#define USE_ARM_MMU
-#define USE_ARM_SSECTION
+#ifndef DEFAULT_ISTKSZ
+#define DEFAULT_ISTKSZ  0x2000U			/* 8KB */
+#endif /* DEFAULT_ISTKSZ */
+
+/*
+ *  FPUに関する設定
+ */
+#define ASM_ARM_FPU_TYPE	vfpv3
 
 /*
  *  GICのディストリビュータの割込みコンフィギュレーションレジスタに設定
@@ -69,16 +76,19 @@
 #define GIC_ARM11MPCORE
 
 /*
- *  GIC依存部の割込み管理機能の初期化は使用しない．
+ *  GIC 390 Errataへの対策を実施
+ */
+#define GIC_PL390_ERRATA
+
+/*
+ *  GIC依存部の割込み管理機能の初期化は使用しない
  */
 #define OMIT_GIC_INITIALIZE_INTERRUPT
 
 /*
- *  GICに関する定義，コアで共通な定義
- *
- *  core_kernel_impl.hは，gic_kernel_impl.hからインクルードされる．
+ *  MPCoreで共通な定義
  */
-#include "gic_kernel_impl.h"
+#include "mpcore_kernel_impl.h"
 
 #ifndef TOPPERS_MACRO_ONLY
 
@@ -91,6 +101,42 @@ extern void chip_initialize(void);
  *  チップ依存の終了処理
  */
 extern void chip_terminate(void);
+
+/*
+ *  L2キャッシュのイネーブル
+ */
+Inline void
+arm_enable_outer_cache(void) 
+{
+	pl310_initialize(0x0U, ~0x0U);
+}
+
+/*
+ *  L2キャッシュのディスエーブル
+*/
+Inline void
+arm_disable_outer_cache(void)
+{
+	pl310_disable();
+}
+
+/*
+ *  L2キャッシュの無効化
+ */
+Inline void
+arm_invalidate_outer_cache(void)
+{
+	pl310_invalidate_all();
+}
+
+/*
+ *  L2キャッシュのクリーン
+ */
+Inline void
+arm_clean_outer_cache(void) 
+{
+	pl310_clean_and_invalidate_all();
+}
 
 #endif /* TOPPERS_MACRO_ONLY */
 #endif /* TOPPERS_CHIP_KERNEL_IMPL_H */

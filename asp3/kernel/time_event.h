@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2015 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2025 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: time_event.h 451 2015-08-14 15:29:07Z ertl-hiro $
+ *  $Id: time_event.h 1853 2025-10-30 14:12:22Z ertl-hiro $
  */
 
 /*
@@ -58,19 +58,16 @@
  */
 typedef uint32_t	EVTTIM;
 
-/*
- *  タイムイベントヒープ中のノードのデータ型の前方参照
- */
-typedef union time_event_node TMEVTN;
-
 /* 
  *  タイムイベントブロックのデータ型の定義
+ *
+ *  タイムイベントヒープ中での位置（index）は，最初のノードを1とする．
  */
 typedef void	(*CBACK)(void *);	/* コールバック関数の型 */
 
 typedef struct time_event_block {
 	EVTTIM	evttim;			/* タイムイベントの発生時刻 */
-	TMEVTN	*p_tmevtn;		/* タイムイベントヒープ中での位置 */
+	uint_t	index;			/* タイムイベントヒープ中での位置 */
 	CBACK	callback;		/* コールバック関数 */
 	void	*arg;			/* コールバック関数へ渡す引数 */
 } TMEVTB;
@@ -78,18 +75,23 @@ typedef struct time_event_block {
 /*
  *  タイムイベントヒープ中のノードのデータ型の定義
  *
- *  タイムイベントヒープの先頭のノード（tmevt_heap[0]）に，最後の使用領
- *  域を指すポインタ（p_last）を格納し，それ以降をタイムイベントヒープ
- *  として使用する．(tmevt_heap[0].p_last - tmevt_heap) が，タイムイベ
- *  ントヒープに登録されているタイムイベントの数となる．
+ *  タイムイベントヒープの配列の先頭要素（tmevt_heap[0]）に，最後のノー
+ *  ドのインデックス（last_index，タイムイベントヒープに登録されている
+ *  タイムイベントの数に一致する）を格納する．配列の2番目以降の要素を
+ *  ヒープ構造に使用し，タイムイベントブロック（TMEVTB）へのポインタを
+ *  格納する．
  */
-union time_event_node {
+typedef union time_event_node {
 	TMEVTB	*p_tmevtb;		/* 対応するタイムイベントブロック */
-	TMEVTN	*p_last;		/* タイムイベントヒープの最後の使用領域 */
-};
+	uint_t	last_index;		/* 最後のノードのインデックス */
+} TMEVTN;
 
 /*
  *  タイムイベントヒープ（kernel_cfg.c）
+ *
+ *  タイムイベントヒープは，タイムイベントを効率的に処理するために，発
+ *  生を待っているタイムイベントの集合を管理し，その中で発生時刻が最も
+ *  早いものを効率的に取り出すためのデータ構造である．
  */
 extern TMEVTN	tmevt_heap[];
 
@@ -138,8 +140,8 @@ extern void	initialize_tmevt(void);
 /*
  *  タイムイベントの挿入位置の探索
  */
-extern TMEVTN	*tmevt_up(TMEVTN *p_tmevtn, EVTTIM evttim);
-extern TMEVTN	*tmevt_down(TMEVTN *p_tmevtn, EVTTIM evttim);
+extern uint_t	tmevt_up(uint_t index, EVTTIM evttim);
+extern uint_t	tmevt_down(uint_t index, EVTTIM evttim);
 
 /*
  *  現在のイベント時刻の更新
@@ -161,6 +163,10 @@ extern void		set_hrt_event(void);
  *  p_tmevtbで指定したタイムイベントブロックを登録する．タイムイベント
  *  の発生時刻，コールバック関数，コールバック関数へ渡す引数は，
  *  p_tmevtbが指すタイムイベントブロック中に設定しておく．
+ *
+ *  高分解能タイマ割込みの発生タイミングの設定を行う必要がない場合，具
+ *  体的には，カーネルの初期化時と，高分解能タイマ割込みの処理中で使用
+ *  するために用意している．その他の場合には，使用してはならない．
  */
 extern void		tmevtb_register(TMEVTB *p_tmevtb);
 
@@ -172,7 +178,7 @@ extern void		tmevtb_register(TMEVTB *p_tmevtb);
  *  バック関数，コールバック関数へ渡す引数は，p_tmevtbが指すタイムイベ
  *  ントブロック中に設定しておく．
  */
-extern void		tmevtb_enqueue(TMEVTB *p_tmevtb, RELTIM time);
+extern void		tmevtb_enqueue_reltim(TMEVTB *p_tmevtb, RELTIM time);
 
 /*
  *  タイムイベントの登録解除
@@ -186,7 +192,7 @@ extern void		tmevtb_dequeue(TMEVTB *p_tmevtb);
  *  調整してはならない場合にtrue，そうでない場合にfalseを返す．現在のイ
  *  ベント時刻を取得した後に呼び出すことを想定している．
  */
-extern bool_t	check_adjtim(int_t adjtim);
+extern bool_t	check_adjtim(int32_t adjtim);
 
 /*
  *  タイムイベントが発生するまでの時間の計算

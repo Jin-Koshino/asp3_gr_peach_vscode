@@ -2,7 +2,7 @@
  *  TOPPERS Software
  *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
- *  Copyright (C) 2009-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2009-2018 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -34,7 +34,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: test_mutex8.c 756 2016-10-03 10:47:38Z ertl-hiro $
+ *  $Id: test_mutex8.c 1439 2020-05-22 20:02:23Z ertl-hiro $
  */
 
 /* 
@@ -147,7 +147,6 @@
  * 【テストシーケンス】
  *
  *	== TASK1（優先度：中）==
- *		call(set_bit_service(get_bit_mutex()))
  *	1:	act_tsk(TASK4)
  *	2:	act_tsk(TASK5)
  *	//		高：TASK5，中：TASK1，低：TASK4
@@ -333,18 +332,14 @@
 #include "kernel_cfg.h"
 #include "test_mutex8.h"
 
-extern ER	bit_mutex(void);
-
 /* DO NOT DELETE THIS LINE -- gentest depends on it. */
 
 void
-task1(intptr_t exinf)
+task1(EXINF exinf)
 {
 	ER_UINT	ercd;
 
 	test_start(__FILE__);
-
-	set_bit_service(get_bit_mutex());
 
 	check_point(1);
 	ercd = act_tsk(TASK4);
@@ -512,7 +507,7 @@ task1(intptr_t exinf)
 }
 
 void
-task2(intptr_t exinf)
+task2(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -541,7 +536,7 @@ task2(intptr_t exinf)
 }
 
 void
-task3(intptr_t exinf)
+task3(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -564,7 +559,7 @@ task3(intptr_t exinf)
 }
 
 void
-task4(intptr_t exinf)
+task4(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -596,7 +591,7 @@ task4(intptr_t exinf)
 }
 
 void
-task5(intptr_t exinf)
+task5(EXINF exinf)
 {
 	ER_UINT	ercd;
 	PRI		tskpri;

@@ -3,7 +3,7 @@
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
  * 
- *  Copyright (C) 2013-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2013-2022 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -35,7 +35,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: target_kernel_impl.c 515 2016-01-13 02:21:39Z ertl-hiro $
+ *  $Id: target_kernel_impl.c 1521 2022-02-06 01:15:43Z ertl-hiro $
  */
 
 /*
@@ -49,29 +49,22 @@
 #endif /* TOPPERS_SUPPORT_OVRHDR */
 
 /*
- *  トレースログマクロのデフォルト定義
- */
-#ifndef LOG_DSP_ENTER
-#define LOG_DSP_ENTER(p_tcb)
-#endif /* LOG_DSP_ENTER */
-
-#ifndef LOG_DSP_LEAVE
-#define LOG_DSP_LEAVE(p_tcb)
-#endif /* LOG_DSP_LEAVE */
-
-/*
  *  ディスパッチャ本体
  */
 static void
 dispatcher(void)
 {
-	LOG_DSP_ENTER(p_runtsk);
+#ifdef LOG_DSP_ENTER
+	log_dsp_enter(p_runtsk);
+#endif /* LOG_DSP_ENTER */
 
 /* dispatcher_0: */
 	p_runtsk = p_schedtsk;
 	if (p_runtsk != NULL) {
 		/* 自タスク（p_runtsk）のTCBからスタックポインタを復帰する */
-		LOG_DSP_LEAVE(p_runtsk);
+#ifdef LOG_DSP_LEAVE
+		log_dsp_leave(p_runtsk);
+#endif /* LOG_DSP_LEAVE */
 		/* 自タスクのTCBから実行再開番地を復帰し，そこへ分岐する */
 	}
 
@@ -81,7 +74,11 @@ dispatcher(void)
 	/* 割込みを許可したらCPUロック解除状態になるよう準備する */
 	/* 割込みをすべて許可する */
 	while (true) {
+#ifdef TOPPERS_CUSTOM_IDLE
+		TOPPERS_CUSTOM_IDLE();
+#else /* TOPPERS_CUSTOM_IDLE */
 		/* 割込み発生を待つ */
+#endif /* TOPPERS_CUSTOM_IDLE */
 	}
 }
 
@@ -151,7 +148,7 @@ call_exit_kernel(void)
 {
 	/* 非タスクコンテキストに切り換える */
 	/* exit_kernelに分岐する */
-	while (true);
+	while (true) ;
 }
 
 /*
@@ -169,10 +166,31 @@ start_r(void)
 }
 
 /*
+ *  システムログの低レベル出力のための初期化
+ *
+ *  セルタイプtPutLogSIOPort内に実装されている関数を直接呼び出す．
+ */
+extern void	tPutLogSIOPort_initialize(void);
+
+/*
  *  ターゲット依存の初期化
  */
 void
 target_initialize(void)
+{
+	/*
+	 *  SIOを初期化
+	 */
+#ifndef TOPPERS_OMIT_TECS
+	tPutLogSIOPort_initialize();
+#endif /* TOPPERS_OMIT_TECS */
+}
+
+/*
+ *  デフォルトのsoftware_term_hook（weak定義）
+ */
+__attribute__((weak))
+void software_term_hook(void)
 {
 }
 
@@ -182,15 +200,10 @@ target_initialize(void)
 void
 target_exit(void)
 {
-	exit(0);
-}
+	/*
+	 *  software_term_hookの呼出し
+	 */
+	software_term_hook();
 
-/*
- *  メイン関数
- */
-int
-main()
-{
-	sta_ker();
-	return(0);
+	while (true) ;
 }

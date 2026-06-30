@@ -3,7 +3,7 @@
 #  TOPPERS Configurator by Ruby
 #
 #  Copyright (C) 2015 by FUJI SOFT INCORPORATED, JAPAN
-#  Copyright (C) 2015-2017 by Embedded and Real-Time Systems Laboratory
+#  Copyright (C) 2015-2024 by Embedded and Real-Time Systems Laboratory
 #              Graduate School of Information Science, Nagoya Univ., JAPAN
 #
 #  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -35,7 +35,7 @@
 #  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
 #  の責任を負わない．
 #
-#  $Id: pass2.rb 134 2017-06-23 11:34:26Z ertl-hiro $
+#  $Id: pass2.rb 206 2024-06-08 03:19:54Z ertl-hiro $
 #
 
 #
@@ -58,20 +58,37 @@ module Cfg1Out
   end
 
   #
-  #  パス1の生成物の読み込み（メインの処理）
+  #  Sレコードファイルからシンボルの文字列を取り出す
+  #
+  def self.GetSymbolString(symbol)
+    if @symbolAddress.has_key?(symbol) \
+			&& !(address = @cfg1SRec.get_value(@symbolAddress[symbol], \
+												$sizeOfCharPtr, false)).nil?
+      return(@cfg1SRec.get_string(address))
+    else
+      return(nil)
+    end
+  end
+
+  #
+  #  パス1の生成物（静的API以外の部分）の読み込み
   #
   def self.Read
     # cfg1_out.symsの読み込み
     @symbolAddress = ReadSymbolFile(CFG1_OUT_SYMS)
 
-    # cfg1_out.srecの読み込み
+    # cfg1_out.srecまたはcfg1_out.dumpの読み込み
     begin
-      @cfg1SRec = SRecord.new(CFG1_OUT_SREC)
+      if File.exist?(CFG1_OUT_SREC)
+        @cfg1SRec = SRecord.new(CFG1_OUT_SREC, :srec)
+      else
+        @cfg1SRec = SRecord.new(CFG1_OUT_DUMP, :dump)
+      end
     rescue Errno::ENOENT, Errno::EACCES => ex
       abort(ex.message)
     end
 
-    # マジックナンバーの取得
+    # マジックナンバーの取得とエンディアンの設定
     if @symbolAddress.has_key?(CFG1_MAGIC_NUM)
       $asmLabel = ""
       $cfg1_prefix = CFG1_PREFIX
@@ -81,6 +98,7 @@ module Cfg1Out
     else
       error_exit("`#{CFG1_MAGIC_NUM}' is not found in `#{CFG1_OUT_SYMS}'")
     end
+    $globalVars.push("asmLabel")
 
     magicNumberData = @cfg1SRec.get_data(@symbolAddress \
 							[$asmLabel + CFG1_MAGIC_NUM], 4)
@@ -89,11 +107,15 @@ module Cfg1Out
     elsif (magicNumberData == "78563412")
       $endianLittle = true
     else
-      error_exit("`#{CFG1_MAGIC_NUM}' is invalid in `#{CFG1_OUT_SREC}'")
+      error_exit("`#{CFG1_MAGIC_NUM}' is invalid " \
+							"in `#{CFG1_OUT_SREC}' or `#{CFG1_OUT_DUMP}'")
     end
+    $globalVars.push("endianLittle")
 
     # 固定出力した変数の取得
     $sizeOfSigned = GetSymbolValue($asmLabel + CFG1_SIZEOF_SIGNED, 4, false)
+    $sizeOfIntptr = GetSymbolValue($asmLabel + CFG1_SIZEOF_INTPTR, 4, false)
+    $sizeOfCharPtr = GetSymbolValue($asmLabel + CFG1_SIZEOF_CHARPTR, 4, false)
 
     # 値取得シンボルの取得
     $symbolValueTable.each do |symbolName, symbolData|
@@ -105,16 +127,40 @@ module Cfg1Out
           symbolData[:VALUE] = (value != 0)
         end
       else
-        value = GetSymbolValue(symbol, $sizeOfSigned, \
+        if symbolData.has_key?(:INTPTR)
+          value = GetSymbolValue(symbol, $sizeOfIntptr, \
 										symbolData.has_key?(:SIGNED))
+        else
+          value = GetSymbolValue(symbol, $sizeOfSigned, \
+										symbolData.has_key?(:SIGNED))
+        end
         if !value.nil?
           symbolData[:VALUE] = value
         end
       end
     end
 
+    # SILによるエンディアン定義のチェック
+    if $symbolValueTable["SIL_ENDIAN_BIG"].has_key?(:VALUE)
+      if $symbolValueTable["SIL_ENDIAN_LITTLE"].has_key?(:VALUE)
+        error_exit("Both SIL_ENDIAN_BIG and SIL_ENDIAN_LITTLE are defined.")
+      else
+        if $endianLittle
+          error_exit("Definition of SIL_ENDIAN_BIG seems to be wrong.")
+        end
+      end
+    else
+      if $symbolValueTable["SIL_ENDIAN_LITTLE"].has_key?(:VALUE)
+        if !$endianLittle
+          error_exit("Definition of SIL_ENDIAN_LITTLE seems to be wrong.")
+        end
+      else
+        # 両方が未定義の場合のエラーチェックは，sil.hで実施する
+      end
+    end
+
     #
-    #  ハッシュの初期化
+    #  コンフィギュレーション情報を格納するハッシュの初期化
     #
     $cfgData = {}
     @objidValues = {}
@@ -130,21 +176,13 @@ module Cfg1Out
         end
       end
     end
-
-    #
-    #  ドメイン生成データをコンフィギュレーションデータ（$cfgData）に格納
-    #
-    $cfgData[:CRE_DOM] = {}
-    $domainId.each do |domainName, domainVal|
-      domid = NumStr.new(domainVal, domainName)
-      $cfgData[:CRE_DOM][domainVal] = { :domid => domid }
-    end
-
-    ReadPhase(nil)
+    $globalVars.push("cfgData")
   end
 
   #
   #  パラメータの値を取り出す
+  #
+  #  生成スクリプト内で追加された静的APIの場合には，apiIndexがnilになる．
   #
   def self.GetParamValue(paramName, param, apiIndex, index, apiParam, cfgInfo)
     if apiParam.has_key?(:ID_DEF)				# オブジェクト識別名（定義）
@@ -159,19 +197,31 @@ module Cfg1Out
 					"#{cfgInfo[:_FILE_]}:#{cfgInfo[:_LINE_]}:")
         value = nil
       end
+    elsif apiParam.has_key?(:STRING)			# 文字列パラメータ
+      if !apiIndex.nil?
+        symbol = "#{$cfg1_prefix}valueof_#{paramName}_#{apiIndex}#{index}"
+        return(GetSymbolString(symbol))
+      else
+        return(param)
+      end
     elsif apiParam.has_key?(:EXPTYPE)			# 整数定数式パラメータ
-      if apiIndex.nil?
+      if !apiIndex.nil?
+        symbol = "#{$cfg1_prefix}valueof_#{paramName}_#{apiIndex}#{index}"
+        if apiParam.has_key?(:INTPTR)
+          value = GetSymbolValue(symbol, $sizeOfIntptr, \
+										apiParam.has_key?(:SIGNED))
+        else
+          value = GetSymbolValue(symbol, $sizeOfSigned, \
+										apiParam.has_key?(:SIGNED))
+        end
+      else
         if param.is_a?(NumStr)
           return(param)
         else
           return(NumStr.new(param))
         end
-      else
-        symbol = "#{$cfg1_prefix}valueof_#{paramName}_#{apiIndex}#{index}"
-        value = GetSymbolValue(symbol, $sizeOfSigned, \
-									apiParam.has_key?(:SIGNED))
       end
-    else										# 一般定数式／文字列パラメータ
+    else										# 一般定数式パラメータ
       return(param)
     end
     return(NumStr.new(value, param))
@@ -199,43 +249,63 @@ module Cfg1Out
     #   @objidValues["semid"]["SEM1"] == 1
     #
 
-    # ID番号割り当ての前処理
-    objidParamNameList = []
+    # オブジェクト識別名の重複チェックのための変数の初期化
+    objectNames = $domainId.keys
+
+    # 有効な静的APIの抽出
     $cfgFileInfo.each do |cfgInfo|
-      # プリプロセッサディレクティブは読み飛ばす
-      next if cfgInfo.has_key?(:DIRECTIVE)
+      cfgInfo[:VALID] = false
 
-      apiDef = $apiDefinition[cfgInfo[:APINAME]]
-      # 異なるフェーズの静的APIは読み飛ばす
-      next if apiDef[:PHASE] != phase
+      # 静的API以外は無効
+      next unless cfgInfo.has_key?(:APINAME)
 
+      # 異なるフェーズの静的APIは無効
+      next if $apiDefinition[cfgInfo[:APINAME]][:PHASE] != phase
+
+      # シンボルファイルに静的APIのインデックスが存在しなければ無効
+      # （条件ディレクティブで消えた静的API）
       apiIndex = cfgInfo[:INDEX]
       if !apiIndex.nil?
-        # シンボルファイルに静的APIのインデックスが存在しなければ読み飛
-        # ばす（ifdef等で消えた静的API）
         symbol = "#{$cfg1_prefix}static_api_#{apiIndex}"
         next unless @symbolAddress.has_key?(symbol)
       end
 
+      # 残ったものが有効な静的API
+      cfgInfo[:VALID] = true
+    end
+
+    # ID番号割り当ての前処理
+    $cfgFileInfo.each do |cfgInfo|
+      # 有効な静的API以外は読み飛ばす
+      next unless cfgInfo[:VALID]
+
+      apiDef = $apiDefinition[cfgInfo[:APINAME]]
       apiDef[:PARAM].each do |apiParam|
         if apiParam.has_key?(:NAME) && apiParam.has_key?(:ID_DEF)
           objidParamName = apiParam[:NAME]
           objName = cfgInfo[objidParamName]
+
+          # オブジェクト識別名の重複チェック
+          if objectNames.include?(objName)
+            error("E_OBJ: #{apiDef[:KEYPAR]} `#{cfgInfo[apiParam[:NAME]]}' " \
+								"is duplicated in #{cfgInfo[:APINAME]}",
+								"#{cfgInfo[:_FILE_]}:#{cfgInfo[:_LINE_]}:")
+            cfgInfo[:VALID] = false
+          end
+          objectNames.push(objName)
+
           if $inputObjid.has_key?(objName)
             # ID番号入力ファイルに定義されていた場合
             @objidValues[objidParamName][objName] = $inputObjid[objName]
           else
             @objidValues[objidParamName][objName] = nil
           end
-          objidParamNameList.push(objidParamName)
         end
       end
     end
 
     # ID番号の割当て処理
-    objidParamNameList.each do |objidParamName|
-      objidList = @objidValues[objidParamName]
-
+    @objidValues.each do |objidParamName, objidList|
       # 未使用のID番号のリスト（使用したものから消していく）
       unusedObjidList = (1.upto(objidList.keys.size)).to_a
 
@@ -266,23 +336,13 @@ module Cfg1Out
     #  静的APIデータをコンフィギュレーションデータ（$cfgData）に格納
     #
     $cfgFileInfo.each do |cfgInfo|
-      # プリプロセッサディレクティブは読み飛ばす
-      next if cfgInfo.has_key?(:DIRECTIVE)
-
-      apiDef = $apiDefinition[cfgInfo[:APINAME]]
-      # 異なるフェーズの静的APIは読み飛ばす
-      next if apiDef[:PHASE] != phase
-
-      apiSym = apiDef[:API].to_sym
-      apiIndex = cfgInfo[:INDEX]
-      if !apiIndex.nil?
-        # シンボルファイルに静的APIのインデックスが存在しなければ読み飛
-        # ばす（ifdef等で消えた静的API）
-        symbol = "#{$cfg1_prefix}static_api_#{apiIndex}"
-        next unless @symbolAddress.has_key?(symbol)
-      end
+      # 有効な静的API以外は読み飛ばす
+      next unless cfgInfo[:VALID]
 
       # パラメータの値をハッシュ形式に格納
+      apiDef = $apiDefinition[cfgInfo[:APINAME]]
+      apiSym = apiDef[:API].to_sym
+      apiIndex = cfgInfo[:INDEX]
       params = {}
       apiDef[:PARAM].each do |apiParam|
         next unless apiParam.has_key?(:NAME)
@@ -309,14 +369,8 @@ module Cfg1Out
       end
 
       # クラスIDを追加
-      if cfgInfo.has_key?(:CLASS)
-        if apiIndex.nil?
-          params[:class] = cfgInfo[:CLASS]
-        else
-          symbol = "#{$cfg1_prefix}valueof_CLASS_#{apiIndex}"
-          value = GetSymbolValue(symbol, $sizeOfSigned, true)
-          params[:class] = NumStr.new(value, cfgInfo[:CLASS])
-        end
+      if cfgInfo.has_key?(:CLSIDX) && $classId.has_key?(cfgInfo[:CLSIDX])
+        params[:class] = $classId[cfgInfo[:CLSIDX]]
       end
 
       # API名，ファイル名，行番号を追加
@@ -342,6 +396,13 @@ module Cfg1Out
   end
 
   #
+  #  ID番号の割当て結果の上書き
+  #
+  def self.SetObjidList(objidParamName, objidList)
+    @objidValues[objidParamName] = objidList
+  end
+
+  #
   #  ID番号出力ファイルの生成
   #
   def self.OutputId(fileName)
@@ -355,6 +416,71 @@ module Cfg1Out
 end
 
 #
+#  ドメイン関連の処理
+#
+def DomainProc
+  #
+  #  ドメインデータ（$domData）を生成
+  #
+  $domData = {}
+  $domainId.each do |domainName, domainVal|
+    domid = NumStr.new(domainVal, domainName)
+    $domData[domainVal] = { :domid => domid }
+  end
+  $globalVars.push("domData")
+end
+
+#
+#  クラス関連の処理
+#
+def ClassProc
+  #
+  #  クラス定義ファイルを実行する
+  #
+  $classFileNames.each do |classFileName|
+    IncludeTrb(classFileName)
+  end
+
+  #
+  #  クラスのリストの加工
+  #
+  $clsData.each do |_, params|
+    bitmap = 0
+    params[:affinityPrcList].each do |prcid|
+      bitmap |= (1 << (prcid - 1))
+    end
+    params[:affinityPrcBitmap] = bitmap
+  end
+
+  #
+  #  クラス記述がエラーの場合に以降のエラーを防ぐために使用するクラス
+  #
+  $TCLS_ERROR = NumStr.new($clsData.keys.first, "")
+
+  #
+  #  クラスID情報（$classId）の生成
+  #
+  $classId = {}
+  $cfgFileInfo.each do |cfgInfo|
+    if cfgInfo.has_key?(:CLSSTR)
+      symbol = "#{$cfg1_prefix}clsid_#{cfgInfo[:CLSIDX]}"
+      value = Cfg1Out.GetSymbolValue(symbol, $sizeOfSigned, true)
+      if !value.nil?
+        if $clsData.has_key?(value)
+          $classId[cfgInfo[:CLSIDX]] = NumStr.new(value, cfgInfo[:CLSSTR])
+        else
+          error("E_ID: illegal class `#{cfgInfo[:CLSSTR]}'",
+								"#{cfgInfo[:_FILE_]}:#{cfgInfo[:_LINE_]}:")
+          # 以降のエラーの抑止
+          $classId[cfgInfo[:CLSIDX]] = $TCLS_ERROR
+        end
+      end
+    end
+  end
+  $globalVars.push("classId")
+end
+
+#
 #  パス2の処理
 #
 def Pass2
@@ -363,16 +489,13 @@ def Pass2
   #
   db = PStore.new(CFG1_OUT_DB)
   db.transaction(true) do
-    $apiDefinition = db[:apiDefinition]
-    $symbolValueTable = db[:symbolValueTable]
-    $cfgFileInfo = db[:cfgFileInfo]
-    $includeFiles = db[:includeFiles]
-    $domainId = db[:domainId]
+    db.roots.each do |var|
+      eval("$#{var} = db[:#{var}]")
+    end
   end
-  $cfg2Data = {}
 
   #
-  #  パス1の生成物を読み込む
+  #  パス1の生成物（静的API以外の部分）を読み込む
   #
   Cfg1Out.Read()
   abort if $errorFlag					# エラー発生時はabortする
@@ -383,8 +506,23 @@ def Pass2
   DefineSymbolValue()
 
   #
+  #  ドメイン関連の処理
+  #
+  if $supportDomain
+    DomainProc()
+  end
+
+  #
+  #  クラス関連の処理
+  #
+  if $supportClass
+    ClassProc()
+  end
+
+  #
   #  生成スクリプト（trbファイル）を実行する
   #
+  Cfg1Out.ReadPhase(nil)
   $trbFileNames.each do |trbFileName|
     if /^(.+):(\w+)$/ =~ trbFileName
       trbFileName = $1
@@ -403,17 +541,12 @@ def Pass2
   #
   #  パス3に引き渡す情報をファイルに生成
   #
-  if $omitOutputDb.nil?
+  if !$omitOutputDb
     db = PStore.new(CFG2_OUT_DB)
     db.transaction do
-      db[:apiDefinition] = $apiDefinition
-      db[:symbolValueTable] = $symbolValueTable
-      db[:cfgFileInfo] = $cfgFileInfo
-      db[:includeFiles] = $includeFiles
-      db[:cfgData] = $cfgData
-      db[:asmLabel] = $asmLabel
-      db[:endianLittle] = $endianLittle
-      db[:cfg2Data] = $cfg2Data
+      $globalVars.each do |var|
+        eval("db[:#{var}] = $#{var}")
+      end
     end
   end
 end

@@ -2,7 +2,7 @@
  *  TOPPERS Software
  *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
- *  Copyright (C) 2008-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2008-2019 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -34,7 +34,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: test_sem2.c 738 2016-04-05 14:19:24Z ertl-hiro $
+ *  $Id: test_sem2.c 1785 2023-01-15 11:44:24Z ertl-hiro $
  */
 
 /* 
@@ -49,31 +49,31 @@
  * 【テスト項目】
  *
  *	(A) sig_sem（非タスクコンテキストからの呼出し）の静的エラーのテスト
- *		(A-1) CPUロック状態からの呼出し
+ *		(A-1) CPUロック状態からの呼出し［NGKI1501］
  *	(B) sig_sem（非タスクコンテキストからの呼出し）によりセマフォ待ち状
- *		態のタスクが待ち解除される場合のテスト
+ *		態のタスクが待ち解除される場合のテスト［NGKI1505］
  *		(B-1) アイドル状態から，待ち解除されたタスクに切り換わる
  *		(B-2) 実行状態のタスクから，待ち解除されたタスクに切り換わる
  *		(B-3) ディスパッチ保留状態で，切り換わらない
  *		(B-4) 待ち解除されたタスクが強制待ち状態で，切り換わらない
  *		(B-5) 待ち解除されたタスクが優先度が低く，切り換わらない
  *	(C) pol_semの静的エラーのテスト
- *		(C-1) 非タスクコンテキストからの呼出し
- *		(C-2) CPUロック状態からの呼出し
+ *		(C-1) 非タスクコンテキストからの呼出し［NGKI1513］
+ *		(C-2) CPUロック状態からの呼出し［NGKI1514］
  *		(C-3) ディスパッチ禁止状態からの呼出し（E_CTXエラーにならない）
  *		(C-4) 割込み優先度マスク全解除でない状態からの呼出し（E_CTXエラー
  *		      にならない）
- *	(D) pol_semでポーリング失敗する
+ *	(D) pol_semでポーリング失敗する［NGKI1521］
  *	(E) twai_semの静的エラーのテスト
- *		(E-1) 非タスクコンテキストからの呼出し
- *		(E-2) CPUロック状態からの呼出し
- *		(E-3) ディスパッチ禁止状態からの呼出し
- *		(E-4) 割込み優先度マスク全解除でない状態からの呼出し
- *		(E-5) tmoutが不正
- *	(F) twai_semでtmout=TMO_POLの時にポーリング失敗する
- *	(G) twai_semでtmout=TMO_FEVRの時にセマフォ待ち状態になる
+ *		(E-1) 非タスクコンテキストからの呼出し［NGKI1513］
+ *		(E-2) CPUロック状態からの呼出し［NGKI1514］
+ *		(E-3) ディスパッチ禁止状態からの呼出し［NGKI1515］
+ *		(E-4) 割込み優先度マスク全解除でない状態からの呼出し［NGKI1515］
+ *		(E-5) tmoutが不正［NGKI1518］
+ *	(F) twai_semでtmout=TMO_POLの時にポーリング失敗する［NGKI1521］
+ *	(G) twai_semでtmout=TMO_FEVRの時にセマフォ待ち状態になる［NGKI1525］
  *	(H) twai_semでtmoutにタイムアウトを設定した時に，タイムアウト付きの
- *		セマフォ待ち状態になる
+ *		セマフォ待ち状態になる［NGKI1525］
  *
  * 【使用リソース】
  *
@@ -180,7 +180,7 @@
 #include <t_syslog.h>
 #include "syssvc/test_svc.h"
 #include "kernel_cfg.h"
-#include "test_sem2.h"
+#include "test_common.h"
 
 static volatile bool_t	flagvar;
 
@@ -202,7 +202,7 @@ signal_var(void)
 static uint_t	alarm1_count = 0;
 
 void
-alarm1_handler(intptr_t exinf)
+alarm1_handler(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -231,7 +231,7 @@ alarm1_handler(intptr_t exinf)
 
 		return;
 
-		check_point(0);
+		check_assert(false);
 
 	case 2:
 		check_point(13);
@@ -242,7 +242,7 @@ alarm1_handler(intptr_t exinf)
 
 		return;
 
-		check_point(0);
+		check_assert(false);
 
 	case 3:
 		check_point(16);
@@ -253,7 +253,7 @@ alarm1_handler(intptr_t exinf)
 
 		return;
 
-		check_point(0);
+		check_assert(false);
 
 	case 4:
 		check_point(20);
@@ -264,7 +264,7 @@ alarm1_handler(intptr_t exinf)
 
 		return;
 
-		check_point(0);
+		check_assert(false);
 
 	case 5:
 		check_point(27);
@@ -275,7 +275,7 @@ alarm1_handler(intptr_t exinf)
 
 		return;
 
-		check_point(0);
+		check_assert(false);
 
 	case 6:
 		check_point(31);
@@ -284,16 +284,16 @@ alarm1_handler(intptr_t exinf)
 
 		return;
 
-		check_point(0);
+		check_assert(false);
 
 	default:
-		check_point(0);
+		check_assert(false);
 	}
-	check_point(0);
+	check_assert(false);
 }
 
 void
-task1(intptr_t exinf)
+task1(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -398,11 +398,11 @@ task1(intptr_t exinf)
 	check_ercd(ercd, E_OK);
 
 	check_finish(35);
-	check_point(0);
+	check_assert(false);
 }
 
 void
-task2(intptr_t exinf)
+task2(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -419,11 +419,11 @@ task2(intptr_t exinf)
 	check_point(28);
 	ercd = ext_tsk();
 
-	check_point(0);
+	check_assert(false);
 }
 
 void
-task3(intptr_t exinf)
+task3(EXINF exinf)
 {
 	ER_UINT	ercd;
 
@@ -462,5 +462,5 @@ task3(intptr_t exinf)
 	check_point(25);
 	ercd = ext_tsk();
 
-	check_point(0);
+	check_assert(false);
 }

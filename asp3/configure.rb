@@ -6,7 +6,7 @@
 # 
 #  Copyright (C) 2001-2003 by Embedded and Real-Time Systems Laboratory
 #                              Toyohashi Univ. of Technology, JAPAN
-#  Copyright (C) 2006-2016 by Embedded and Real-Time Systems Laboratory
+#  Copyright (C) 2006-2022 by Embedded and Real-Time Systems Laboratory
 #              Graduate School of Information Science, Nagoya Univ., JAPAN
 # 
 #  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -38,12 +38,11 @@
 #  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
 #  の責任を負わない．
 # 
-#  $Id: configure.rb 626 2016-02-12 13:46:32Z ertl-hiro $
+#  $Id: configure.rb 1660 2022-09-27 13:51:46Z ertl-hiro $
 # 
 
+Encoding.default_external = 'utf-8'
 require "optparse"
-require "fileutils"
-require "shell"
 
 #  オプションの定義
 #
@@ -55,10 +54,11 @@ require "shell"
 #  -c <cfgfile>			システムコンフィギュレーションファイル（.cfgファイ
 #						ル名）名
 #  -C <cdlflle>			コンポーネント記述ファイル（.cdlファイル）名
-#  -U <applobjs>		他のアプリケーションプログラムファイル
+#  -U <applobjs>		アプリケーションの追加のオブジェクトファイル
 #						（.oファイル名で指定．複数指定可）
-#  -S <syssvcobjs>		システムサービスのプログラムファイル
+#  -S <syssvcobjs>		システムサービスのオブジェクトファイル
 #						（.oファイル名で指定．複数指定可）
+#  -B <bannerobj>		バナー表示のオブジェクトファイル（.oファイル名で指定）
 #  -L <kernel_lib>		カーネルライブラリ（libkernel.a）のディレクトリ名
 #						（省略した場合，カーネルライブラリもmakeする）
 #  -f					カーネルを関数単位でコンパイルするかどうかの指定
@@ -66,8 +66,11 @@ require "shell"
 #  -l <srclang>			プログラミング言語（現時点ではcとc++のみサポート）
 #  -m <tempmakefile>	Makefileのテンプレートのファイル名の指定（デフォル
 #						トはsampleディレクトリのMakefile）
-#  -d <depdir>			依存関係ファイルのディレクトリ名（デフォルトはdeps）
+#  -d <objdir>			中間オブジェクトファイルと依存関係ファイルを置く
+#						ディレクトリ名（デフォルトはobjs）
 #  -w					TECSを使用しない
+#  -W <tecsdir>			TECS関係ファイルのディレクトリ名（デフォルトはソー
+#						スファイルのディレクトリの下のtecsgen）
 #  -r					トレースログ記録のサンプルコードを使用するかどうか
 #						の指定
 #  -V <devtooldir>		開発ツール（コンパイラ等）の置かれているディレクトリ
@@ -76,7 +79,8 @@ require "shell"
 #  -G <tecsgen>			TECSジェネレータ（tecsgen）のパス名
 #  -o <options>			コンパイルオプション（COPTSに追加）
 #  -O <options>			シンボル定義オプション（CDEFSに追加）
-#  -k <options>			リンカオプション（LDFLAGS等に追加）
+#  -k <options>			リンカオプション（LDFLAGSに追加）
+#  -b <options>			リンカオプション（LIBSに追加）
 
 #  使用例(1)
 #
@@ -103,19 +107,28 @@ require "shell"
 #
 $target = nil
 $appldirs = []
+$applname = nil
+$option_t = false
+$cfgfile = nil
+$cdlfile = nil
 $applobjs = []
 $syssvcobjs = []
+$bannerobj = nil
 $kernel_lib = ""
-$kernel_funcobjs = ""
+$srcdir = nil
 $srclang = "c"
-$depdir = "deps"
-$omit_tecs = ""
-$enable_trace = ""
+$tempmakefile = nil
+$objdir = "objs"
+$tecsdir = nil
 $devtooldir = ""
 $ruby = "ruby"
+$cfg = nil
+$tecsgen = nil
 $copts = []
 $cdefs = []
 $ldflags = []
+$libs = []
+$vartable = Hash.new("")
 
 #
 #  オプションの処理
@@ -125,7 +138,7 @@ OptionParser.new(nil, 22) do |opt|
     $target = val
   end
   opt.on("-a appldirs",		"application directories") do |val|
-    $appldirs += val.split("\s+")
+    $appldirs += val.split(/\s+/)
   end
   opt.on("-A applname",		"application program name") do |val|
     $applname = val
@@ -140,16 +153,19 @@ OptionParser.new(nil, 22) do |opt|
     $cdlfile = val
   end
   opt.on("-U applobjs",		"additional application object files") do |val|
-    $applobjs += val.split("\s+")
+    $applobjs += val.split(/\s+/)
   end
   opt.on("-S syssvcobjs",	"system service object files") do |val|
-    $syssvcobjs += val.split("\s+")
+    $syssvcobjs += val.split(/\s+/)
+  end
+  opt.on("-B bannerobj",	"banner display object file") do |val|
+    $bannerobj = val
   end
   opt.on("-L kernel_lib",	"directory of built kernel library") do |val|
     $kernel_lib = val
   end
-  opt.on("-f", "each function is complied separately in kernel") do |val|
-    $kernel_funcobjs = true
+  opt.on("-f", "each function is compiled separately in kernel") do |val|
+    $vartable["KERNEL_FUNCOBJS"] = "true"
   end
   opt.on("-D srcdir",		"path of source code directory") do |val|
     $srcdir = val
@@ -160,14 +176,17 @@ OptionParser.new(nil, 22) do |opt|
   opt.on("-m tempmakefile", "template file of Makefile") do |val|
     $tempmakefile = val
   end
-  opt.on("-d depdir",		"dependency relation file directory") do |val|
-    $depdir = val
+  opt.on("-d objdir",		"relocatable object file directory") do |val|
+    $objdir = val
   end
   opt.on("-w",				"TECS is not used at all") do |val|
-    $omit_tecs = true
+    $vartable["OMIT_TECS"] = "true"
+  end
+  opt.on("-W tecsdir",		"path of TECS file directory") do |val|
+    $tecsdir = val
   end
   opt.on("-r",				"use the sample code for trace log") do |val|
-    $enable_trace = true
+    $vartable["ENABLE_TRACE"] = "true"
   end
   opt.on("-V devtooldir",	"development tools directory") do |val|
     $devtooldir = val
@@ -182,15 +201,29 @@ OptionParser.new(nil, 22) do |opt|
     $tecsgen = val
   end
   opt.on("-o options",		"compiler options") do |val|
-    $copts += val.split("\s+")
+    $copts += val.split(/\s+/)
   end
   opt.on("-O options",		"symbol definition options") do |val|
-    $cdefs += val.split("\s+")
+    $cdefs += val.split(/\s+/)
   end
   opt.on("-k options",		"linker options") do |val|
-    $ldflags += val.split("\s+")
+    $ldflags += val.split(/\s+/)
+  end
+  opt.on("-b options",		"linker options for linking libraries") do |val|
+    $libs += val.split(/\s+/)
   end
   opt.parse!(ARGV)
+end
+
+#
+#  パラメータの処理
+#
+ARGV.each do |arg|
+  if /^([A-Za-z0-9_]+)\s*\=\s*(.*)$/ =~ arg
+    $vartable[$1] = $2
+  else
+    $vartable[arg] = true
+  end
 end
 
 #
@@ -205,33 +238,33 @@ def GetObjectExtension
 end
 
 #
-#  変数のデフォルト値
+#  変数のデフォルト値（文字列変数のデフォルト値は初期化で与える）
 #
 if $appldirs.empty?
   $appldirs.push("\$(SRCDIR)/sample")
 end
 $applname ||= "sample1"
-if $option_t.nil?
-  $applobjs.unshift($applname + ".o")
-end
 $cfgfile ||= $applname + ".cfg"
 $cdlfile ||= $applname + ".cdl"
+$applobjs.unshift($applname + ".o") if !$option_t
+$bannerobj ||= $vartable.has_key?("OMIT_TECS") ? "banner.o" : "tBannerMain.o"
 if $srcdir.nil?
   # ソースディレクトリ名を取り出す
-  if /(.*)\/configure/ =~ $0
+  if /^(.*)\/configure/ =~ $0
     $srcdir = $1
   else
-    $srcdir = Shell.new.cwd
+    $srcdir = Dir.pwd
   end
 end
 if /^\// =~ $srcdir
   $srcabsdir = $srcdir
 else
-  $srcabsdir = Shell.new.cwd + "/" + $srcdir
+  $srcabsdir = Dir.pwd + "/" + $srcdir
 end
 $tempmakefile ||= $srcdir + "/sample/Makefile"
+$tecsdir ||= "\$(SRCDIR)/tecsgen"
 $cfg ||= $ruby + " \$(SRCDIR)/cfg/cfg.rb"
-$tecsgen ||= $ruby + " \$(SRCDIR)/tecsgen/tecsgen.rb"
+$tecsgen ||= $ruby + " \$(TECSDIR)/tecsgen.rb"
 
 #
 #  -Tオプションとターゲット依存部ディレクトリの確認
@@ -255,7 +288,6 @@ end
 #
 #  変数テーブルの作成
 #
-$vartable = Hash.new("")
 $vartable["TARGET"] = $target
 $vartable["APPLDIRS"] = $appldirs.join(" ")
 $vartable["APPLNAME"] = $applname
@@ -263,14 +295,13 @@ $vartable["CFGFILE"] = $cfgfile
 $vartable["CDLFILE"] = $cdlfile
 $vartable["APPLOBJS"] = $applobjs.join(" ")
 $vartable["SYSSVCOBJS"] = $syssvcobjs.join(" ")
+$vartable["BANNEROBJ"] = $bannerobj
 $vartable["KERNEL_LIB"] = $kernel_lib
-$vartable["KERNEL_FUNCOBJS"] = $kernel_funcobjs
 $vartable["SRCDIR"] = $srcdir
 $vartable["SRCABSDIR"] = $srcabsdir
 $vartable["SRCLANG"] = $srclang
-$vartable["DEPDIR"] = $depdir
-$vartable["OMIT_TECS"] = $omit_tecs
-$vartable["ENABLE_TRACE"] = $enable_trace
+$vartable["OBJDIR"] = $objdir
+$vartable["TECSDIR"] = $tecsdir
 $vartable["DEVTOOLDIR"] = $devtooldir
 $vartable["RUBY"] = $ruby
 $vartable["CFG"] = $cfg
@@ -278,14 +309,8 @@ $vartable["TECSGEN"] = $tecsgen
 $vartable["COPTS"] = $copts.join(" ")
 $vartable["CDEFS"] = $cdefs.join(" ")
 $vartable["LDFLAGS"] = $ldflags.join(" ")
+$vartable["LIBS"] = $libs.join(" ")
 $vartable["OBJEXT"] = GetObjectExtension()
-ARGV.each do |arg|
-  if /^([A-Za-z0-9_]+)\s*\=\s*(.*)$/ =~ arg
-    $vartable[$1] = $2
-  else
-    $vartable[arg] = true
-  end
-end
 
 #
 #  ファイルを変換する
@@ -294,7 +319,7 @@ def convert(inFileName, outFileName)
   puts("Generating #{outFileName} from #{inFileName}.\n")
   if (File.file?(outFileName))
     puts("#{outFileName} exists.  Save as #{outFileName}.bak.\n")
-    FileUtils.move(outFileName, outFileName + ".bak")
+    File.rename(outFileName, outFileName + ".bak")
   end
 
   begin
@@ -320,8 +345,8 @@ end
 convert($tempmakefile, "Makefile")
 
 #
-#  依存関係ファイルのディレクトリの作成
+#  中間オブジェクトファイルと依存関係ファイルを置くディレクトリの作成
 #
-if !File.directory?($depdir)
-  Dir.mkdir($depdir)
+if !File.directory?($objdir)
+  Dir.mkdir($objdir)
 end

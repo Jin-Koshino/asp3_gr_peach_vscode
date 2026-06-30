@@ -3,7 +3,7 @@
 #  TECS Generator
 #      Generator for TOPPERS Embedded Component System
 #  
-#   Copyright (C) 2008-2014 by TOPPERS Project
+#   Copyright (C) 2008-2017 by TOPPERS Project
 #--
 #   上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
 #   ア（本ソフトウェアを改変したものを含む．以下同じ）を使用・複製・改
@@ -159,7 +159,7 @@ class Plugin < Node
 
       #  識別子取得
       if arg =~ /\A[a-zA-Z_]\w*/ then
-        ident = $~
+        ident = $~.to_s    # 
         arg = $'
       else
         cdl_error( "P1001 plugin arg: cannot find identifier in $1" , arg )
@@ -180,16 +180,16 @@ class Plugin < Node
       arg.sub!( /\A\s*(?:\\\n)*\s*(.*)/, '\1')
 
       # 右辺文字列
-      if arg =~ /\A\\"(.*?)\\"\s*,/ then      # \"  \" で囲まれている場合
+      if arg =~ /\A\\"(.*?)\\"\s*,/ then      # \"  \" で囲まれている場合 (末尾に',' あり)
         rhs = $1
         remain = $'
-      elsif arg =~ /\A%(.*?)%\s*,/ then      # %   % で囲まれている場合
+      elsif arg =~ /\A%(.*?)%\s*,/ then      # %   % で囲まれている場合 (末尾に',' あり)
         rhs = $1
         remain = $'
-      elsif arg =~ /\A!(.*?)!\s*,/ then    # $   $ で囲まれている場合
+      elsif arg =~ /\A!(.*?)!\s*,/ then    # !  ! で囲まれている場合 (末尾に',' あり)
         rhs = $1
         remain = $'
-      elsif arg =~ /\A'(.*?)'\s*,/ then    # $   $ で囲まれている場合
+      elsif arg =~ /\A'(.*?)'\s*,/ then    # '  ' で囲まれている場合 (末尾に',' あり)
         rhs = $1
         remain = $'
       elsif  arg =~ /\A\\"(.*?)\\"\s*,/ then  # || にも [,$] にもできなかった
@@ -202,10 +202,10 @@ class Plugin < Node
       elsif arg =~ /\A%(.*?)%\s*\z/ then      # %   % で囲まれている場合
         rhs = $1
         remain = $'
-      elsif arg =~ /\A!(.*?)!\s*\z/ then    # $   $ で囲まれている場合
+      elsif arg =~ /\A!(.*?)!\s*\z/ then    # !  ! で囲まれている場合
         rhs = $1
         remain = $'
-      elsif arg =~ /\A'(.*?)'\s*\z/ then    # $   $ で囲まれている場合
+      elsif arg =~ /\A'(.*?)'\s*\z/ then    # '  ' で囲まれている場合
         rhs = $1
         remain = $'
       elsif  arg =~ /\A\\"(.*?)\\"\s*\z/ then  # || にも [,$] にもできなかった

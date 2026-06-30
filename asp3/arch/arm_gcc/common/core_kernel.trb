@@ -5,7 +5,7 @@
 #       Advanced Standard Profile Kernel
 # 
 #   Copyright (C) 2015 by FUJI SOFT INCORPORATED, JAPAN
-#   Copyright (C) 2015,2016 by Embedded and Real-Time Systems Laboratory
+#   Copyright (C) 2015-2024 by Embedded and Real-Time Systems Laboratory
 #               Graduate School of Information Science, Nagoya Univ., JAPAN
 # 
 #   上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
 #   アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
 #   の責任を負わない．
 # 
-#   $Id: core_kernel.trb 662 2016-02-27 02:33:51Z ertl-hiro $
+#   $Id: core_kernel.trb 1833 2024-06-02 16:09:51Z ertl-hiro $
 # 
 
 #
@@ -47,12 +47,12 @@
 #
 #  有効なCPU例外ハンドラ番号
 #
-$EXCNO_VALID = [ 0, 1, 2, 3, 4, 5 ]
+$EXCNO_VALID = [ 0, 1, 2, 3, 4, 5, 6 ]
 
 #
 #  DEF_EXCで使用できるCPU例外ハンドラ番号
 #
-$EXCNO_DEFEXC_VALID = [ 0, 1, 2, 3, 5 ]
+$EXCNO_DEFEXC_VALID = [ 0, 1, 2, 3, 5, 6 ]
 
 #
 #  ターゲット非依存部のインクルード
@@ -64,8 +64,8 @@ IncludeTrb("kernel/kernel.trb")
 #
 $kernelCfgC.comment_header("Interrupt Handler Table")
 
-$kernelCfgC.add("const FP _kernel_inh_table[TNUM_INHNO] = {")
-$INHNO_VALID.each_with_index do |inhnoVal, index|
+$kernelCfgC.add("const FP _kernel_inh_table[TMAX_INHNO + 1] = {")
+0.upto($TMAX_INHNO).each_with_index do |inhnoVal, index|
   $kernelCfgC.add(",") if index > 0
   $kernelCfgC.append("\t/* 0x#{sprintf("%03x", inhnoVal)} */ ")
   if $cfgData[:DEF_INH].has_key?(inhnoVal)
@@ -83,8 +83,8 @@ $kernelCfgC.add2("};")
 if $USE_INTCFG_TABLE
   $kernelCfgC.comment_header("Interrupt Configuration Table")
 
-  $kernelCfgC.add("const uint8_t _kernel_intcfg_table[TNUM_INTNO] = {")
-  $INTNO_VALID.each_with_index do |intnoVal, index|
+  $kernelCfgC.add("const uint8_t _kernel_intcfg_table[TMAX_INTNO + 1] = {")
+  0.upto($TMAX_INTNO).each_with_index do |intnoVal, index|
     $kernelCfgC.add(",") if index > 0
     $kernelCfgC.append("\t/* 0x#{sprintf("%03x", intnoVal)} */ ")
     if $cfgData[:CFG_INT].has_key?(intnoVal)
@@ -102,8 +102,8 @@ end
 #
 $kernelCfgC.comment_header("CPU Exception Handler Table")
 
-$kernelCfgC.add("const FP _kernel_exc_table[TNUM_EXCNO] = {")
-$EXCNO_VALID.each_with_index do |excnoVal, index|
+$kernelCfgC.add("const FP _kernel_exc_table[TMAX_EXCNO + 1] = {")
+0.upto($TMAX_EXCNO).each_with_index do |excnoVal, index|
   $kernelCfgC.add(",") if index > 0
   $kernelCfgC.append("\t/* #{excnoVal} */ ")
   if $cfgData[:DEF_EXC].has_key?(excnoVal)

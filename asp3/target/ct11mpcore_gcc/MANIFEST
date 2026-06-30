@@ -5,15 +5,14 @@ MANIFEST
 Makefile.target
 ct11mpcore.h
 ct11mpcore.ld
-tPutLogCT11MPCore.c
-tPutLogCT11MPCore.cdl
+sp804.h
 tSIOPortCT11MPCore.cdl
 tSIOPortCT11MPCoreMain_inline.h
 target.cdl
 target_cfg1_out.h
 target_check.trb
-target_kernel.h
 target_kernel.cfg
+target_kernel.h
 target_kernel.trb
 target_kernel_impl.c
 target_kernel_impl.h

@@ -1,9 +1,10 @@
 # startup.c
 kerflg
+mpk_valid
 exit_kernel
-initialize_kmm
-kernel_malloc
-kernel_free
+initialize_mempool
+malloc_mempool
+free_mempool
 
 # task.c
 p_runtsk
@@ -25,7 +26,6 @@ task_terminate
 
 # taskhook.c
 mtxhook_check_ceilpri
-mtxhook_scan_ceilmtx
 mtxhook_release_all
 
 # wait.c
@@ -50,7 +50,7 @@ tmevt_down
 update_current_evttim
 set_hrt_event
 tmevtb_register
-tmevtb_enqueue
+tmevtb_enqueue_reltim
 tmevtb_dequeue
 check_adjtim
 tmevt_lefttim
@@ -87,8 +87,6 @@ receive_pridata
 free_mtxcb
 initialize_mutex
 mutex_check_ceilpri
-mutex_scan_ceilmtx
-mutex_drop_priority
 mutex_acquire
 mutex_release
 mutex_release_all
@@ -123,8 +121,10 @@ initialize_exception
 
 # kernel_cfg.c
 initialize_object
-call_inirtn
-call_terrtn
+tnum_inirtn
+inirtnb_table
+tnum_terrtn
+terrtnb_table
 tmax_tskid
 tmax_stskid
 tinib_table
@@ -192,7 +192,15 @@ tmevt_heap
 istksz
 istk
 istkpt
-kmmsz
-kmm
+mpksz
+mpk
+
+# tTraceLog.c
+log_dsp_enter
+log_dsp_leave
+log_inh_enter
+log_inh_leave
+log_exc_enter
+log_exc_leave
 
 INCLUDE "target"

@@ -3,7 +3,7 @@
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
  * 
- *  Copyright (C) 2006-2017 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2006-2020 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -35,7 +35,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: chip_timer.c 777 2017-02-03 23:20:57Z ertl-hiro $
+ *  $Id: chip_timer.c 1437 2020-05-20 12:12:16Z ertl-hiro $
  */
 
 /*
@@ -58,7 +58,7 @@
  *  タイマの起動処理
  */
 void
-target_hrt_initialize(intptr_t exinf)
+target_hrt_initialize(EXINF exinf)
 {
 	/*
 	 *  OSタイマをフリーランニングコンペアモードに設定する．
@@ -85,7 +85,7 @@ target_hrt_initialize(intptr_t exinf)
  *  タイマの停止処理
  */
 void
-target_hrt_terminate(intptr_t exinf)
+target_hrt_terminate(EXINF exinf)
 {
 	/*
 	 *  OSタイマを停止する．
@@ -99,39 +99,6 @@ target_hrt_terminate(intptr_t exinf)
 }
 
 /*
- *  高分解能タイマへの割込みタイミングの設定
- */
-void
-target_hrt_set_event(HRTCNT hrtcnt)
-{
-	uint32_t	cnt = hrtcnt * 33 + hrtcnt / 3 + 1;
-	uint32_t	current;
-
-	/*
-	 *  現在のカウント値を読み，hrtcnt後に割込みが発生するように設定する．
-	 */
-	current = sil_rew_mem(OSTM_CNT(OSTM0_BASE));
-	sil_wrw_mem(OSTM_CMP(OSTM0_BASE), current + cnt);
-
-	/*
-	 *  上で現在のカウント値を読んで以降に，cnt以上カウントアップしてい
-	 *  た場合には，割込みを発生させる．
-	 */
-	if (sil_rew_mem(OSTM_CNT(OSTM0_BASE)) - current >= cnt) {
-		raise_int(INTNO_OSTM0);
-	}
-}
-
-/*
- *  高分解能タイマ割込みの要求
- */
-void
-target_hrt_raise_event(void)
-{
-	raise_int(INTNO_OSTM0);
-}
-
-/*
  *  タイマ割込みハンドラ
  */
 void
@@ -142,6 +109,7 @@ target_hrt_handler(void)
 	 */
 	signal_time();
 }
+
 /*
  *  オーバランタイマドライバ
  */
@@ -151,7 +119,7 @@ target_hrt_handler(void)
  *  オーバランタイマの初期化処理
  */
 void
-target_ovrtimer_initialize(intptr_t exinf)
+target_ovrtimer_initialize(EXINF exinf)
 {
 	/*
 	 *  OSタイマをインターバルタイマモードに設定する．
@@ -168,7 +136,7 @@ target_ovrtimer_initialize(intptr_t exinf)
  *  オーバランタイマの停止処理
  */
 void
-target_ovrtimer_terminate(intptr_t exinf)
+target_ovrtimer_terminate(EXINF exinf)
 {
 	/*
 	 *  OSタイマを停止する．
@@ -179,52 +147,6 @@ target_ovrtimer_terminate(intptr_t exinf)
 	 *  オーバランタイマ割込み要求をクリアする．
 	 */
 	clear_int(INTNO_OSTM1);
-}
-
-/*
- *  オーバランタイマの停止
- */
-PRCTIM
-target_ovrtimer_stop(void)
-{
-	uint32_t	cnt;
-
-	/*
-	 *  OSタイマを停止する．
-	 */
-	sil_wrb_mem(OSTM_TT(OSTM1_BASE), OSTM_TT_STOP);
-
-	if (probe_int(INTNO_OSTM1)) {
-		/*
-		 *  割込み要求が発生している場合
-		 */
-		clear_int(INTNO_OSTM1);
-		return(0U);
-	}
-	else {
-		cnt = sil_rew_mem(OSTM_CNT(OSTM1_BASE));
-		return((PRCTIM)((cnt + 34) / 5 * 3 / 20));
-	}
-}
-
-/*
- *  オーバランタイマの現在値の読出し
- */
-PRCTIM
-target_ovrtimer_get_current(void)
-{
-	uint32_t	cnt;
-
-	if (probe_int(INTNO_OSTM1)) {
-		/*
-		 *  割込み要求が発生している場合
-		 */
-		return(0U);
-	}
-	else {
-		cnt = sil_rew_mem(OSTM_CNT(OSTM1_BASE));
-		return((PRCTIM)((cnt + 34) / 5 * 3 / 20));
-	}
 }
 
 /*

@@ -3,7 +3,7 @@
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
  * 
- *  Copyright (C) 2007-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2007-2018 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -35,7 +35,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: target_test.h 797 2017-07-19 14:22:39Z ertl-hiro $
+ *  $Id: target_test.h 1172 2019-03-11 04:45:33Z ertl-hiro $
  */
 
 /*
@@ -50,14 +50,21 @@
  */
 #define INTNO1				35U			/* USBからの割込み */
 #define INTNO1_INTATR		TA_ENAINT|TA_EDGE
-#define INTNO1_INTPRI		-15
+#define INTNO1_INTPRI		(-15)
 #define intno1_clear()
+
+/*
+ *  サンプルプログラムのためのその他の定義
+ */
+#ifdef TOPPERS_USE_QEMU
+#define MEASURE_TWICE
+#endif /* TOPPERS_USE_QEMU */
 
 /*
  *  テストプログラムで使用する時間パラメータに関する定義
  */
 #ifdef TOPPERS_USE_QEMU
-#define TEST_TIME_CP	1000U
+#define TEST_TIME_CP	10000U
 #endif /* TOPPERS_USE_QEMU */
 
 /*

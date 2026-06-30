@@ -3,7 +3,7 @@
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
  * 
- *  Copyright (C) 2007-2017 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2007-2020 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -35,7 +35,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: target_timer.h 795 2017-07-03 17:08:39Z ertl-hiro $
+ *  $Id: target_timer.h 1437 2020-05-20 12:12:16Z ertl-hiro $
  */
 
 /*
@@ -51,9 +51,13 @@
 #include "ct11mpcore.h"
 
 /*
- *  チップで共通な定義（MPCore用）
+ *  高分解能タイマドライバ
+ *
+ *  MPCoreのプライベートタイマとウォッチドッグを用いて高分解能タイマを
+ *  実現する．
  */
-#include "chip_timer.h"
+#define USE_MPCORE_TMRWDG_HRT
+#include "mpcore_timer.h"
 
 /*
  *  オーバランタイマドライバ
@@ -85,19 +89,27 @@
 /*
  *  オーバランタイマの初期化処理
  */
-extern void target_ovrtimer_initialize(intptr_t exinf);
+extern void target_ovrtimer_initialize(EXINF exinf);
 
 /*
  *  オーバランタイマの停止処理
  */
-extern void target_ovrtimer_terminate(intptr_t exinf);
+extern void target_ovrtimer_terminate(EXINF exinf);
 
 /*
  *  オーバランタイマの動作開始
+ *
+ *  QEMUでは，ロードレジスタに0を設定すると警告メッセージが出るため，1
+ *  を設定するようにしている．
  */
 Inline void
 target_ovrtimer_start(PRCTIM ovrtim)
 {
+#ifdef TOPPERS_USE_QEMU
+	if (ovrtim == 0U) {
+		ovrtim = 1U;
+	}
+#endif /* TOPPERS_USE_QEMU */
 	sil_wrw_mem(SP804_LR(OVRTIMER_TIMER_BASE), (uint32_t) ovrtim);
 	sil_wrw_mem(SP804_CR(OVRTIMER_TIMER_BASE), SP804_ENABLE|SP804_CONFIG);
 }

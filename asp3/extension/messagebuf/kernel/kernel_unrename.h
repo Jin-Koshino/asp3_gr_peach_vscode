@@ -33,7 +33,6 @@
  *  taskhook.c
  */
 #undef mtxhook_check_ceilpri
-#undef mtxhook_scan_ceilmtx
 #undef mtxhook_release_all
 #undef mbfhook_dequeue_wobj
 
@@ -64,7 +63,7 @@
 #undef update_current_evttim
 #undef set_hrt_event
 #undef tmevtb_register
-#undef tmevtb_enqueue
+#undef tmevtb_enqueue_reltim
 #undef tmevtb_dequeue
 #undef check_adjtim
 #undef tmevt_lefttim
@@ -106,8 +105,6 @@
  */
 #undef initialize_mutex
 #undef mutex_check_ceilpri
-#undef mutex_scan_ceilmtx
-#undef mutex_drop_priority
 #undef mutex_acquire
 #undef mutex_release
 #undef mutex_release_all
@@ -155,8 +152,10 @@
  *  kernel_cfg.c
  */
 #undef initialize_object
-#undef call_inirtn
-#undef call_terrtn
+#undef tnum_inirtn
+#undef inirtnb_table
+#undef tnum_terrtn
+#undef terrtnb_table
 #undef tmax_tskid
 #undef tinib_table
 #undef torder_table
@@ -198,6 +197,16 @@
 #undef istksz
 #undef istk
 #undef istkpt
+
+/*
+ *  tTraceLog.c
+ */
+#undef log_dsp_enter
+#undef log_dsp_leave
+#undef log_inh_enter
+#undef log_inh_leave
+#undef log_exc_enter
+#undef log_exc_leave
 
 
 #include "target_unrename.h"

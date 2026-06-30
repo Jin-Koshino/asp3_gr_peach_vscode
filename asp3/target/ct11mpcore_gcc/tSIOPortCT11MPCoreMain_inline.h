@@ -1,7 +1,6 @@
 /*
- *  TOPPERS/ASP Kernel
- *      Toyohashi Open Platform for Embedded Real-Time Systems/
- *      Advanced Standard Profile Kernel
+ *  TOPPERS Software
+ *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
@@ -37,7 +36,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: tSIOPortCT11MPCoreMain_inline.h 526 2016-01-14 11:43:26Z ertl-hiro $
+ *  $Id: tSIOPortCT11MPCoreMain_inline.h 910 2018-03-07 00:23:17Z ertl-hiro $
  */
 
 /*

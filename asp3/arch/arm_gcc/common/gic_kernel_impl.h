@@ -2,7 +2,7 @@
  *  TOPPERS Software
  *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
- *  Copyright (C) 2006-2017 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2006-2025 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -34,7 +34,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: gic_kernel_impl.h 799 2017-07-19 23:12:42Z ertl-hiro $
+ *  $Id: gic_kernel_impl.h 1860 2025-10-31 02:24:10Z ertl-hiro $
  */
 
 /*
@@ -52,16 +52,14 @@
 #include "arm.h"
 
 /*
- *  割込み番号の数，最小値と最大値
+ *  割込み番号の最大値
  */
-#define TNUM_INTNO		GIC_TNUM_INTNO
-#define TMIN_INTNO		UINT_C(0)
 #define TMAX_INTNO		(GIC_TNUM_INTNO - 1)
 
 /*
- *  割込みハンドラ番号の数
+ *  割込みハンドラ番号の最大値
  */
-#define TNUM_INHNO		GIC_TNUM_INTNO
+#define TMAX_INHNO		TMAX_INTNO
 
 /*
  *  割込み番号の定義
@@ -77,7 +75,13 @@
  *  いほど優先度が下がるものとする．GICのレジスタ構成と整合させるために，
  *  優先度の段数が256段階の時にあわせて表す．
  */
+#if defined(TOPPERS_SAFEG_SECURE)
+#define GIC_PRI_LEVEL		(0 - (TMIN_INTPRI - 1))
+#elif defined(TOPPERS_SAFEG_NONSECURE)
+#define GIC_PRI_LEVEL		((0 - (TMIN_INTPRI - 1)) << 1)
+#else /* TOPPERS_SAFEG_NONSECURE */
 #define GIC_PRI_LEVEL		(TMAX_INTPRI - TMIN_INTPRI + 2)
+#endif /* TOPPERS_SAFEG_NONSECURE */
 
 #if GIC_PRI_LEVEL == 16
 #define GIC_PRI_SHIFT		4
@@ -113,7 +117,7 @@
  *  めのマクロ．
  */
 #ifndef GIC_REG
-#define GIC_REG(base, offset)	((uint32_t *)((base) + (offset ## U)))
+#define GIC_REG(base, offset)	((uint32_t *)((base) + (offset)))
 #endif /* GIC_REG */
 
 /*
@@ -125,7 +129,7 @@
 #define GICC_IAR		GIC_REG(GICC_BASE, 0x0C)
 #define GICC_EOIR		GIC_REG(GICC_BASE, 0x10)
 #define GICC_RPR		GIC_REG(GICC_BASE, 0x14)
-#define GICC_HPIR		GIC_REG(GICC_BASE, 0x18)
+#define GICC_HPPIR		GIC_REG(GICC_BASE, 0x18)
 
 /*
  *  CPUインタフェース制御レジスタ（GICC_CTLR）の設定値（GICv1でセキュリ
@@ -197,7 +201,7 @@
 Inline void
 gicc_set_priority(uint_t pri)
 {
-	sil_wrw_mem(GICC_PMR, pri);
+	sil_swrw_mem(GICC_PMR, pri);
 }
 
 /*
@@ -229,7 +233,7 @@ extern void gicc_terminate(void);
 Inline void
 gicd_disable_int(INTNO intno)
 {
-	sil_wrw_mem(GICD_ICENABLER(intno / 32), (1U << (intno % 32)));
+	sil_swrw_mem(GICD_ICENABLER(intno / 32), (1U << (intno % 32)));
 }
 
 /*
@@ -238,7 +242,7 @@ gicd_disable_int(INTNO intno)
 Inline void
 gicd_enable_int(INTNO intno)
 {
-	sil_wrw_mem(GICD_ISENABLER(intno / 32), (1U << (intno % 32)));
+	sil_swrw_mem(GICD_ISENABLER(intno / 32), (1U << (intno % 32)));
 }
 
 /*
@@ -247,7 +251,7 @@ gicd_enable_int(INTNO intno)
 Inline void
 gicd_clear_pending(INTNO intno)
 {
-	sil_wrw_mem(GICD_ICPENDR(intno / 32), (1U << (intno % 32)));
+	sil_swrw_mem(GICD_ICPENDR(intno / 32), (1U << (intno % 32)));
 }
 
 /*
@@ -256,7 +260,7 @@ gicd_clear_pending(INTNO intno)
 Inline void
 gicd_set_pending(INTNO intno)
 {
-	sil_wrw_mem(GICD_ISPENDR(intno / 32), (1U << (intno % 32)));
+	sil_swrw_mem(GICD_ISPENDR(intno / 32), (1U << (intno % 32)));
 }
 
 /*
@@ -275,11 +279,14 @@ gicd_probe_pending(INTNO intno)
 Inline void
 gicd_raise_sgi(INTNO intno)
 {
-	sil_wrw_mem(GICD_SGIR, (0x02000000 | intno));
+	sil_swrw_mem(GICD_SGIR, (0x02000000 | intno));
 }
 
 /*
  *  割込みのコンフィグレーション
+ *
+ *  この関数は，カーネルの初期化中に呼び出すことを想定しているため，
+ *  GICの操作後にメモリ同期バリアを入れていない．
  */
 Inline void
 gicd_config(INTNO intno, uint_t config)
@@ -297,6 +304,9 @@ gicd_config(INTNO intno, uint_t config)
 
 /*
  *  割込みグループの設定（セキュリティ拡張）
+ *
+ *  この関数は，カーネルの初期化中に呼び出すことを想定しているため，
+ *  GICの操作後にメモリ同期バリアを入れていない．
  */
 Inline void
 gicd_config_group(INTNO intno, uint_t group)
@@ -312,6 +322,9 @@ gicd_config_group(INTNO intno, uint_t group)
 
 /*
  *  割込み要求ラインに対する割込み優先度の設定（priは内部表現）
+ *
+ *  この関数は，カーネルの初期化中に呼び出すことを想定しているため，
+ *  GICの操作後にメモリ同期バリアを入れていない．
  */
 Inline void
 gicd_set_priority(INTNO intno, uint_t pri)
@@ -328,22 +341,25 @@ gicd_set_priority(INTNO intno, uint_t pri)
 /*
  *  割込みターゲットプロセッサの設定
  *
- *  prcsは，ターゲットとするプロセッサを表すビットのビット毎論理和で指
- *  定する．
+ *  affinityは，ターゲットとするプロセッサを表すビットのビット毎論理和
+ *  で指定する．
  *		プロセッサ0 : 0x01
  *		プロセッサ1 : 0x02
  *		プロセッサ2 : 0x04
  *		プロセッサ3 : 0x08
+ *
+ *  この関数は，カーネルの初期化中に呼び出すことを想定しているため，
+ *  GICの操作後にメモリ同期バリアを入れていない．
  */
 Inline void
-gicd_set_target(INTNO intno, uint_t prcs)
+gicd_set_target(INTNO intno, uint_t affinity)
 {
 	uint_t		shift = (intno % 4) * 8;
 	uint32_t	reg;
 
 	reg = sil_rew_mem(GICD_ITARGETSR(intno / 4));
 	reg &= ~(0xffU << shift);
-	reg |= (prcs << shift);
+	reg |= (affinity << shift);
 	sil_wrw_mem(GICD_ITARGETSR(intno / 4), reg);
 }
 
@@ -362,7 +378,7 @@ extern void gicd_terminate(void);
 /*
  *  割込み番号の範囲の判定
  */
-#define VALID_INTNO(intno)	(TMIN_INTNO <= (intno) && (intno) <= TMAX_INTNO)
+#define VALID_INTNO(intno)	(0 <= (intno) && (intno) <= TMAX_INTNO)
 
 /*
  *  割込み要求ラインのための標準的な初期化情報を生成する
@@ -410,6 +426,16 @@ t_get_ipm(void)
 {
 	return(EXT_IPM(gicc_get_priority()));
 }
+
+/*
+ *  割込み要求禁止フラグが操作できる割込み番号の範囲の判定
+ */
+#ifdef GIC_SUPPORT_DISABLE_SGI
+#define VALID_INTNO_DISINT(intno)	VALID_INTNO(intno)
+#else /* GIC_SUPPORT_DISABLE_SGI */
+#define VALID_INTNO_DISINT(intno) \
+				(GIC_INTNO_PPI0 <= (intno) && (intno) <= TMAX_INTNO)
+#endif /* GIC_SUPPORT_DISABLE_SGI */
 
 /*
  *  割込み要求禁止フラグのセット

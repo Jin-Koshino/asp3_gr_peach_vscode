@@ -1,7 +1,7 @@
 /*
  *		テスト用プラットフォームのコンポーネント記述ファイル
  *
- *  $Id: test_pf.cdl 756 2016-10-03 10:47:38Z ertl-hiro $
+ *  $Id: test_pf.cdl 884 2018-02-02 02:08:44Z ertl-hiro $
  */
 
 /*
@@ -17,17 +17,26 @@ import("syssvc/tSysLog.cdl");
 import("syssvc/tSysLogAdapter.cdl");
 import("syssvc/tBanner.cdl");
 import("syssvc/tTestService.cdl");
-
-/*
- *  自己診断サービスのセルタイプの定義
- */
-import("test/tBitKernel.cdl");  
-import("test/tBitMutex.cdl");  
+import("syssvc/tTestServiceAdapter.cdl");
 
 /*
  *  ターゲット依存部の取り込み
  */
 import("target.cdl");
+
+/*
+ *  システムログ機能のアダプタの組上げ記述
+ */
+cell tSysLogAdapter SysLogAdapter {
+	cSysLog = SysLog.eSysLog;
+};
+
+/*
+ *  テストプログラム用サービスのアダプタの組上げ記述
+ */
+cell tTestServiceAdapter TestServiceAdapter {
+	cTestService = TestService.eTestService;
+};
 
 /*
  *  システムログ機能の組上げ記述
@@ -39,14 +48,6 @@ cell tSysLog SysLog {
 									   	/* 低レベル出力すべき重要度 */
 	/* 低レベル出力との結合 */
 	cPutLog = PutLogTarget.ePutLog;
-};
-
-/*
- *  C言語で記述されたアプリケーションから，TECSベースのシステムログ機能
- *  を呼び出すためのアダプタの組上げ記述
- */
-cell tSysLogAdapter SysLogAdapter {
-	cSysLog = SysLog.eSysLog;
 };
 
 /*
@@ -63,15 +64,4 @@ cell tBanner Banner {
  */
 cell tTestService TestService {
 	cSysLog = SysLog.eSysLog;
-};
-
-cell tBitKernel BitKernel {
-};
-
-cell tBitMutex BitMutex {
-};
-
-cell tBuiltInTestAdaptor BuiltInTestAdaptor {
-	cBuiltInTest[0] = BitKernel.eBuiltInTest;
-	cBuiltInTest[1] = BitMutex.eBuiltInTest;
 };

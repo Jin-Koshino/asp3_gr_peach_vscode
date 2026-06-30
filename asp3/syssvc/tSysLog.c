@@ -1,11 +1,10 @@
 /*
- *  TOPPERS/ASP Kernel
- *      Toyohashi Open Platform for Embedded Real-Time Systems/
- *      Advanced Standard Profile Kernel
+ *  TOPPERS Software
+ *      Toyohashi Open Platform for Embedded Real-Time Systems
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2016 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2020 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +36,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: tSysLog.c 550 2016-01-17 04:16:26Z ertl-hiro $
+ *  $Id: tSysLog.c 1407 2020-05-01 13:55:20Z ertl-hiro $
  */
 
 /*
@@ -49,6 +48,17 @@
 #undef TOPPERS_OMIT_SYSLOG
 #include <t_syslog.h>
 #include <log_output.h>
+
+/*
+ *  トレースログに関する設定
+ */
+#ifdef TOPPERS_ENABLE_TRACE
+#include "arch/tracelog/trace_log.h"
+#endif /* TOPPERS_ENABLE_TRACE */
+
+/*
+ *  ターゲット依存情報の定義
+ */
 #include "target_syssvc.h"
 
 /*
@@ -98,15 +108,12 @@ eSysLog_write(uint_t priority, const SYSLOG *p_syslog)
 	SIL_LOC_INT();
 
 	/*
-	 *  ログ時刻の設定
-	 */
-	SYSLOG_GET_LOGTIM(&(((SYSLOG *) p_syslog)->logtim));
-
-	/*
 	 *  ログバッファに記録
 	 */
 	if ((VAR_logMask & LOG_MASK(priority)) != 0U) {
 		VAR_logBuffer[VAR_tail] = *p_syslog;
+		SYSLOG_GET_LOGTIM(&(VAR_logBuffer[VAR_tail].logtim));
+
 		VAR_tail++;
 		if (VAR_tail >= ATTR_logBufferSize) {
 			VAR_tail = 0U;
@@ -124,8 +131,11 @@ eSysLog_write(uint_t priority, const SYSLOG *p_syslog)
 	 *  低レベル出力
 	 */
 	if ((VAR_lowMask & LOG_MASK(priority)) != 0U) {
-		syslog_print(p_syslog, low_putchar);
-		low_putchar('\n');
+		SYSLOG	logbuf;
+
+		logbuf = *p_syslog;
+		SYSLOG_GET_LOGTIM(&(logbuf.logtim));
+		syslog_print(&logbuf, low_putchar);
 	}
 
 	SIL_UNL_INT();
@@ -211,13 +221,10 @@ eSysLog_flush(void)
 	SIL_LOC_INT();
 
 	while ((rercd = eSysLog_read(&logbuf)) >= 0) {
-		if (rercd > 0) {
+		if (((uint_t) rercd) > 0U) {
 			syslog_lostmsg((uint_t) rercd, low_putchar);
 		}
-		if (logbuf.logtype >= LOG_TYPE_COMMENT) {
-			syslog_print(&logbuf, low_putchar);
-			low_putchar('\n');
-		}
+		syslog_print(&logbuf, low_putchar);
 	}
 
 	SIL_UNL_INT();

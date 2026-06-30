@@ -5,7 +5,7 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2005-2017 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2005-2022 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: interrupt.c 801 2017-07-20 16:07:56Z ertl-hiro $
+ *  $Id: interrupt.c 1751 2022-12-17 03:47:12Z ertl-hiro $
  */
 
 /*
@@ -127,10 +127,6 @@
 #ifndef VALID_INTNO_PRBINT
 #define VALID_INTNO_PRBINT(intno)	VALID_INTNO(intno)
 #endif /* VALID_INTNO_PRBINT */
-
-#ifndef VALID_INTNO_CREISR
-#define VALID_INTNO_CREISR(intno)	VALID_INTNO(intno)
-#endif /* VALID_INTNO_CREISR */
 
 /*
  *  割込み優先度の範囲の判定
@@ -328,7 +324,7 @@ ER_BOOL
 prb_int(INTNO intno)
 {
 	bool_t	locked;
-	ER		ercd;
+	ER_BOOL	ercd;
 
 	LOG_PRB_INT_ENTER(intno);
 	CHECK_PAR(VALID_INTNO_PRBINT(intno));		/*［NGKI3945］［NGKI3952］*/
@@ -338,7 +334,7 @@ prb_int(INTNO intno)
 		lock_cpu();
 	}
 	if (check_intno_cfg(intno)) {
-		ercd = (ER_BOOL) probe_int(intno);		/*［NGKI3948］*/
+		ercd = (ER_BOOL) probe_int(intno);		/*［NGKI5214］［NGKI5215］*/
 	}
 	else {
 		ercd = E_OBJ;							/*［NGKI3947］*/
@@ -372,13 +368,11 @@ chg_ipm(PRI intpri)
 	lock_cpu();
 	t_set_ipm(intpri);							/*［NGKI3111］*/
 	if (intpri == TIPM_ENAALL && enadsp) {
-		dspflg = true;
-		p_schedtsk = search_schedtsk();
+		set_dspflg();
 		if (p_runtsk->raster && p_runtsk->enater) {
 #ifdef TOPPERS_SUPPORT_OVRHDR
 			if (p_runtsk->staovr) {
 				(void) target_ovrtimer_stop();
-				ovrtimer_flag = false;
 			}
 #endif /* TOPPERS_SUPPORT_OVRHDR */
 			task_terminate(p_runtsk);

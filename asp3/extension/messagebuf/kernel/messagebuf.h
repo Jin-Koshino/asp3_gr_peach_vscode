@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: messagebuf.h 244 2014-09-30 18:08:03Z ertl-hiro $
+ *  $Id: messagebuf.h 1790 2023-01-18 06:07:25Z ertl-hiro $
  */
 
 /*
@@ -60,7 +60,7 @@
  */
 typedef struct messagebuf_initialization_block {
 	ATR			mbfatr;			/* メッセージバッファ属性 */
-	uint_t		maxmsz;			/* メッセージの最大長 */
+	uint_t		maxmsz;			/* 最大メッセージサイズ */
 	size_t		mbfsz;			/* メッセージバッファ管理領域のサイズ */
 	void		*mbfmb;			/* メッセージバッファ管理領域の先頭番地 */
 } MBFINIB;
@@ -71,6 +71,9 @@ typedef struct messagebuf_initialization_block {
  *  この構造体は，同期・通信オブジェクトの管理ブロックの共通部分（WOBJCB）
  *  を拡張（オブジェクト指向言語の継承に相当）したもので，最初の2つの
  *  フィールドが共通になっている．
+ *
+ *  メッセージバッファ管理領域が空の場合とフルの場合のいずれの場合にも，
+ *  headとtailが一致する．
  */
 typedef struct messagebuf_control_block {
 	QUEUE		swait_queue;	/* メッセージバッファ送信待ちキュー */

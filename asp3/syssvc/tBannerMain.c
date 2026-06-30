@@ -5,8 +5,8 @@
  * 
  *  Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory
  *                              Toyohashi Univ. of Technology, JAPAN
- *  Copyright (C) 2004-2017 by Embedded and Real-Time Systems Laboratory
- *              Graduate School of Information Science, Nagoya Univ., JAPAN
+ *  Copyright (C) 2004-2026 by Embedded and Real-Time Systems Laboratory
+ *                  Graduate School of Informatics, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
  *  ア（本ソフトウェアを改変したものを含む．以下同じ）を使用・複製・改
@@ -37,7 +37,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: tBannerMain.c 771 2017-01-18 02:28:26Z ertl-hiro $
+ *  $Id: tBannerMain.c 1877 2026-05-07 01:39:42Z ertl-hiro $
  */
 
 /*
@@ -55,15 +55,15 @@ static const char banner[] = "\n"
 " (" __DATE__ ", " __TIME__ ")\n"
 "Copyright (C) 2000-2003 by Embedded and Real-Time Systems Laboratory\n"
 "                            Toyohashi Univ. of Technology, JAPAN\n"
-"Copyright (C) 2004-2017 by Embedded and Real-Time Systems Laboratory\n"
-"            Graduate School of Information Science, Nagoya Univ., JAPAN\n"
+"Copyright (C) 2004-2026 by Embedded and Real-Time Systems Laboratory\n"
+"                Graduate School of Informatics, Nagoya Univ., JAPAN\n"
 "%s";
 
 /*
  *  カーネル起動メッセージの出力（受け口関数）
  */
 void
-eBannerInitialize_main(intptr_t exinf)
+eBannerInitialize_main(void)
 {
 	syslog_5(LOG_NOTICE, banner,
 				(TKERNEL_PRVER >> 12) & 0x0fU,

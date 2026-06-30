@@ -3,7 +3,7 @@
  *      Toyohashi Open Platform for Embedded Real-Time Systems/
  *      Advanced Standard Profile Kernel
  * 
- *  Copyright (C) 2006-2017 by Embedded and Real-Time Systems Laboratory
+ *  Copyright (C) 2006-2018 by Embedded and Real-Time Systems Laboratory
  *              Graduate School of Information Science, Nagoya Univ., JAPAN
  * 
  *  上記著作権者は，以下の(1)〜(4)の条件を満たす場合に限り，本ソフトウェ
@@ -35,7 +35,7 @@
  *  アの利用により直接的または間接的に生じたいかなる損害に関しても，そ
  *  の責任を負わない．
  * 
- *  $Id: target_kernel.h 791 2017-07-02 18:46:36Z ertl-hiro $
+ *  $Id: target_kernel.h 1058 2018-11-19 16:19:31Z ertl-hiro $
  */
 
 /*
@@ -56,13 +56,35 @@
 #define TMAX_INTPRI		(-1)		/* 割込み優先度の最大値（最低値）*/
 
 /*
- *  オーバランハンドラのサポートの可否
+ *  サポートできる機能の定義
  */
+#define TOPPERS_TARGET_SUPPORT_ENA_INT		/* ena_int */
+#define TOPPERS_TARGET_SUPPORT_DIS_INT		/* dis_int */
+#define TOPPERS_TARGET_SUPPORT_CLR_INT		/* clr_int */
+#define TOPPERS_TARGET_SUPPORT_RAS_INT		/* ras_int */
+#define TOPPERS_TARGET_SUPPORT_PRB_INT		/* prb_int */
 #define TOPPERS_TARGET_SUPPORT_OVRHDR
 
 /*
- *  チップで共通な定義
+ *  高分解能タイマのタイマ周期
  */
-#include "chip_kernel.h"
+/* TCYC_HRTCNTは定義しない．*/
+
+/*
+ *  高分解能タイマのカウント値の進み幅
+ */
+#define TSTEP_HRTCNT	1U
+
+/*
+ *  スプリアス割込みへの対策
+ */
+#ifdef TOPPERS_USE_QEMU
+#define MPCORE_TMR_CLEAR_INT()		clear_int(MPCORE_IRQNO_TMR)
+#endif /* TOPPERS_USE_QEMU */
+
+/*
+ *  コアで共通な定義
+ */
+#include "core_kernel.h"
 
 #endif /* TOPPERS_TARGET_KERNEL_H */
